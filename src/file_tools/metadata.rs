@@ -1,4 +1,6 @@
+use crate::file_tools::verification::FailureReason;
 use crate::file_tools::verification::VerificationResult;
+use std::fs::Metadata;
 use std::ops::Range;
 use std::time::SystemTime;
 
@@ -81,36 +83,49 @@ impl MetadataVerificationResult {
     }
 }
 
-pub fn check_metadata(metadata: Metadata, constraints: MetadataConstraints) -> MetadataVerificationResult {
+pub fn check_metadata(
+    metadata: Metadata,
+    constraints: MetadataConstraints,
+) -> MetadataVerificationResult {
     let modified_result = match constraints.modified {
-        Some(range) => {
-            if range.contains(&metadata.modified) {
-                VerificationResult::Verified
-            } else {
-                VerificationResult::Failed(FailureReason::TimeNotInRange(metadata.modified))
+        Some(range) => match metadata.modified() {
+            Ok(modified_time) => {
+                if range.contains(&modified_time) {
+                    VerificationResult::Verified
+                } else {
+                    VerificationResult::Failed(FailureReason::TimeNotInRange(modified_time))
+                }
             }
-        }
+            Err(e) => VerificationResult::Failed(FailureReason::IoError(e)),
+        },
+        None => VerificationResult::Skipped,
     };
 
     let accessed_result = match constraints.accessed {
-        Some(range) => {
-            if range.contains(&metadata.accessed) {
-                VerificationResult::Verified
-            } else {
-                VerificationResult::Failed(FailureReason::TimeNotInRange(metadata.accessed))
+        Some(range) => match metadata.accessed() {
+            Ok(accessed_time) => {
+                if range.contains(&accessed_time) {
+                    VerificationResult::Verified
+                } else {
+                    VerificationResult::Failed(FailureReason::TimeNotInRange(accessed_time))
+                }
             }
-        }
+            Err(e) => VerificationResult::Failed(FailureReason::IoError(e)),
+        },
         None => VerificationResult::Skipped,
     };
 
     let created_result = match constraints.created {
-        Some(range) => {
-            if range.contains(&metadata.created) {
-                VerificationResult::Verified
-            } else {
-                VerificationResult::Failed(FailureReason::TimeNotInRange(metadata.created))
+        Some(range) => match metadata.created() {
+            Ok(created_time) => {
+                if range.contains(&created_time) {
+                    VerificationResult::Verified
+                } else {
+                    VerificationResult::Failed(FailureReason::TimeNotInRange(created_time))
+                }
             }
-        }
+            Err(e) => VerificationResult::Failed(FailureReason::IoError(e)),
+        },
         None => VerificationResult::Skipped,
     };
 
