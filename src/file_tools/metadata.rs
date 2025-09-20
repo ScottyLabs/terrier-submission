@@ -81,6 +81,42 @@ impl MetadataVerificationResult {
     }
 }
 
+pub fn check_metadata(metadata: Metadata, constraints: MetadataConstraints) -> MetadataVerificationResult {
+    let modified_result = match constraints.modified {
+        Some(range) => {
+            if range.contains(&metadata.modified) {
+                VerificationResult::Verified
+            } else {
+                VerificationResult::Failed(FailureReason::TimeNotInRange(metadata.modified))
+            }
+        }
+    };
+
+    let accessed_result = match constraints.accessed {
+        Some(range) => {
+            if range.contains(&metadata.accessed) {
+                VerificationResult::Verified
+            } else {
+                VerificationResult::Failed(FailureReason::TimeNotInRange(metadata.accessed))
+            }
+        }
+        None => VerificationResult::Skipped,
+    };
+
+    let created_result = match constraints.created {
+        Some(range) => {
+            if range.contains(&metadata.created) {
+                VerificationResult::Verified
+            } else {
+                VerificationResult::Failed(FailureReason::TimeNotInRange(metadata.created))
+            }
+        }
+        None => VerificationResult::Skipped,
+    };
+
+    MetadataVerificationResult::new(modified_result, accessed_result, created_result)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::file_tools::verification::FailureReason;
