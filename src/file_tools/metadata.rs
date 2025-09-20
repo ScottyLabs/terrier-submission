@@ -119,9 +119,9 @@ pub fn check_metadata(metadata: Metadata, constraints: MetadataConstraints) -> M
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::file_tools::verification::FailureReason;
     use crate::file_tools::verification::FailureReason::TimeNotInRange;
-    use super::*;
 
     #[test]
     fn test_create_empty_metadata_constraints() {
@@ -148,7 +148,7 @@ mod tests {
         assert!(constraints.created.is_some());
         assert_eq!(constraints.created, Some(before..after));
     }
-    
+
     #[test]
     fn test_metadata_verification_result_all_verified() {
         let result = MetadataVerificationResult::new(
@@ -157,7 +157,7 @@ mod tests {
             VerificationResult::Verified,
         );
         assert!(result.all_verified());
-        
+
         let now = SystemTime::now();
         let result = MetadataVerificationResult::new(
             VerificationResult::Verified,
@@ -166,7 +166,7 @@ mod tests {
         );
         assert!(!result.all_verified());
     }
-    
+
     #[test]
     fn test_metadata_verification_result_some_skipped() {
         let now = SystemTime::now();
@@ -176,7 +176,7 @@ mod tests {
             VerificationResult::Verified,
         );
         assert!(result.all_verified_or_skipped());
-        
+
         let now = SystemTime::now();
         let result = MetadataVerificationResult::new(
             VerificationResult::Verified,
