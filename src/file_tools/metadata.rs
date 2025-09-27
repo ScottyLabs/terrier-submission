@@ -83,7 +83,6 @@ impl MetadataVerificationResult {
     }
 }
 
-<<<<<<< HEAD
 fn verify_time<F>(
     constaint: Option<&Range<SystemTime>>,
     getter : F,
@@ -103,10 +102,6 @@ fn verify_time<F>(
     }
 }
 
-=======
-/// Checks the results of a file's metadata against the provided constraints.
-/// Returns a `MetadataVerificationResult` indicating the outcome of each check.
->>>>>>> c3810571847f81197db95340d7a92ff2f7a21ca0
 pub fn check_metadata(
     metadata: Metadata,
     constraints: MetadataConstraints,
