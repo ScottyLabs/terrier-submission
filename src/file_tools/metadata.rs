@@ -84,9 +84,12 @@ impl MetadataVerificationResult {
 }
 
 fn verify_time<F>(
-    constaint: Option<&Range<SystemTime>>,
+    constraint: Option<&Range<SystemTime>>,
     getter : F,
-) -> VerificationResult {
+) -> VerificationResult
+where
+    F: FnOnce() -> Result<SystemTime, std::io::Error>,
+{
     match constraint {
         Some(range) => match getter() {
             Ok(time) => {
