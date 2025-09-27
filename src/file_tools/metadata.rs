@@ -42,7 +42,7 @@ impl MetadataConstraints {
 
 /// The result of verifying a file's metadata against a set of constraints.
 #[derive(Debug)]
-struct MetadataVerificationResult {
+pub struct MetadataVerificationResult {
     /// Result of verifying the modified time
     pub modified: VerificationResult,
     /// Result of verifying the last accessed time
@@ -83,6 +83,7 @@ impl MetadataVerificationResult {
     }
 }
 
+<<<<<<< HEAD
 fn verify_time<F>(
     constaint: Option<&Range<SystemTime>>,
     getter : F,
@@ -102,6 +103,10 @@ fn verify_time<F>(
     }
 }
 
+=======
+/// Checks the results of a file's metadata against the provided constraints.
+/// Returns a `MetadataVerificationResult` indicating the outcome of each check.
+>>>>>>> c3810571847f81197db95340d7a92ff2f7a21ca0
 pub fn check_metadata(
     metadata: Metadata,
     constraints: MetadataConstraints,
@@ -116,7 +121,6 @@ pub fn check_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_tools::verification::FailureReason;
     use crate::file_tools::verification::FailureReason::TimeNotInRange;
 
     #[test]
@@ -188,5 +192,146 @@ mod tests {
         );
         assert!(!result.all_verified());
         assert!(!result.all_verified_or_skipped());
+    }
+
+    fn unique_temp_path() -> std::path::PathBuf {
+        use rand::{RngCore, rng};
+        let mut rng = rng();
+        let mut bytes = [0u8; 8];
+        rng.fill_bytes(&mut bytes);
+        let unique = u64::from_le_bytes(bytes);
+        let mut path = std::env::temp_dir();
+        path.push(format!("check_metadata_test_{}.tmp", unique));
+        path
+    }
+
+    fn create_temp_file_and_metadata() -> (std::path::PathBuf, Metadata) {
+        use std::fs::{File, metadata as stat};
+        use std::io::Write;
+        let path = unique_temp_path();
+        let mut f = File::create(&path).expect("create temp file");
+        // Write a small payload to ensure the file exists and has times set
+        f.write_all(b"meta-test").expect("write temp file");
+        f.sync_all().ok();
+        let md = stat(&path).expect("stat temp file");
+        (path, md)
+    }
+
+    #[test]
+    fn test_check_metadata_all_skipped() {
+        let (path, md) = create_temp_file_and_metadata();
+        let constraints = MetadataConstraints::new_empty();
+        let res = check_metadata(md, constraints);
+        assert!(matches!(res.modified, VerificationResult::Skipped));
+        assert!(matches!(res.accessed, VerificationResult::Skipped));
+        assert!(matches!(res.created, VerificationResult::Skipped));
+        assert!(res.all_verified_or_skipped());
+        // cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_check_metadata_all_verified_or_skipped() {
+        let (path, md) = create_temp_file_and_metadata();
+        let dur = std::time::Duration::from_secs(5);
+        let m = md.modified().expect("metadata.modified");
+        let a = md.accessed().expect("metadata.accessed");
+        // Some platforms may not support created(); if so, don't constrain it.
+        let created_ok = md.created().ok();
+
+        let modified_range = (m - dur)..(m + dur);
+        let accessed_range = (a - dur)..(a + dur);
+        let created_range = created_ok.map(|c| (c - dur)..(c + dur));
+
+        let constraints =
+            MetadataConstraints::new(Some(modified_range), Some(accessed_range), created_range);
+        let res = check_metadata(md, constraints);
+        assert!(matches!(res.modified, VerificationResult::Verified));
+        assert!(matches!(res.accessed, VerificationResult::Verified));
+        match created_ok {
+            Some(_) => assert!(matches!(res.created, VerificationResult::Verified)),
+            None => assert!(matches!(res.created, VerificationResult::Skipped)),
+        }
+        assert!(res.all_verified_or_skipped());
+        // cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_check_metadata_modified_out_of_range_fails() {
+        let (path, md) = create_temp_file_and_metadata();
+        let m = md.modified().expect("metadata.modified");
+        // Range completely after the actual modified time
+        let constraints = MetadataConstraints::new(
+            Some(
+                (m + std::time::Duration::from_secs(10))..(m + std::time::Duration::from_secs(20)),
+            ),
+            None,
+            None,
+        );
+        let res = check_metadata(md, constraints);
+        match res.modified {
+            VerificationResult::Failed(FailureReason::TimeNotInRange(t)) => assert_eq!(t, m),
+            other => panic!("expected Failed(TimeNotInRange), got {:?}", other),
+        }
+        assert!(matches!(res.accessed, VerificationResult::Skipped));
+        assert!(matches!(res.created, VerificationResult::Skipped));
+        // cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_check_metadata_accessed_out_of_range_fails() {
+        let (path, md) = create_temp_file_and_metadata();
+        let a = md.accessed().expect("metadata.accessed");
+        let constraints = MetadataConstraints::new(
+            None,
+            Some(
+                (a + std::time::Duration::from_secs(10))..(a + std::time::Duration::from_secs(20)),
+            ),
+            None,
+        );
+        let res = check_metadata(md, constraints);
+        match res.accessed {
+            VerificationResult::Failed(FailureReason::TimeNotInRange(t)) => assert_eq!(t, a),
+            other => panic!(
+                "expected Failed(TimeNotInRange) for accessed, got {:?}",
+                other
+            ),
+        }
+        assert!(matches!(res.modified, VerificationResult::Skipped));
+        assert!(matches!(res.created, VerificationResult::Skipped));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_check_metadata_created_out_of_range_or_skipped() {
+        let (path, md) = create_temp_file_and_metadata();
+        let created = md.created().ok();
+        let constraints = match created {
+            Some(c) => MetadataConstraints::new(
+                None,
+                None,
+                Some(
+                    (c + std::time::Duration::from_secs(10))
+                        ..(c + std::time::Duration::from_secs(20)),
+                ),
+            ),
+            None => MetadataConstraints::new(None, None, None),
+        };
+        let res = check_metadata(md, constraints);
+        match created {
+            Some(c) => match res.created {
+                VerificationResult::Failed(FailureReason::TimeNotInRange(t)) => assert_eq!(t, c),
+                other => panic!(
+                    "expected Failed(TimeNotInRange) for created, got {:?}",
+                    other
+                ),
+            },
+            None => assert!(matches!(res.created, VerificationResult::Skipped)),
+        }
+        assert!(matches!(res.modified, VerificationResult::Skipped));
+        assert!(matches!(res.accessed, VerificationResult::Skipped));
+        let _ = std::fs::remove_file(path);
     }
 }
