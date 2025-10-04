@@ -49,15 +49,15 @@ pub fn get_creation_time(repo: &Repository) -> SystemTime {
     }
 }
 
-struct GithubRepo {
-    url: String,
-    branch: String,
-    local_path: String,
-    repo: Repository,
+pub struct GithubRepo {
+    pub url: String,
+    pub branch: String,
+    pub local_path: String,
+    pub repo: Repository,
 }
 
 impl GithubRepo {
-    fn new(link: &str, branch: &str) -> Result<Self, git2::Error> {
+    pub fn new(link: &str, branch: &str) -> Result<Self, git2::Error> {
         let local_path = format!("/tmp/repo_{}", uuid::Uuid::new_v4());
         let repo = Repository::clone(link, &local_path)?;
         Ok(Self {
@@ -68,11 +68,11 @@ impl GithubRepo {
         })
     }
 
-    fn get_creation_time(&self) -> SystemTime {
+    pub fn get_creation_time(&self) -> SystemTime {
         get_creation_time(&self.repo)
     }
 
-    fn destroy(self) {
+    pub fn destroy(self) {
         let _ = std::fs::remove_dir_all(&self.local_path);
     }
 }

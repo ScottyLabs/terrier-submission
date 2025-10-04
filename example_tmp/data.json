@@ -1,6 +1,7 @@
 {
 	"zip": "./src/data.json",
-	"repo": "./",
+	"repo": "https://github.com/ScottyLabs/terrier-submission/",
+    "branch": "main",
 	"usernames": ["name_1", "name_2", "...", "name_k"],
 	"start_time": 1758300104,
     "end_time": 1758486504
