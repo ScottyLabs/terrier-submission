@@ -2,5 +2,5 @@
 	"zip": "./src/data.json",
 	"repo": "name_of_repo",
 	"usernames": ["name_1", "name_2", "...", "name_k"],
-	"start_time": "2020-10-10 21:02:20.346474121 UTC"
+	"start_time": 1234
 }
