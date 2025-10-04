@@ -83,10 +83,7 @@ impl MetadataVerificationResult {
     }
 }
 
-fn verify_time<F>(
-    constraint: Option<&Range<SystemTime>>,
-    getter : F,
-) -> VerificationResult
+fn verify_time<F>(constraint: Option<&Range<SystemTime>>, getter: F) -> VerificationResult
 where
     F: FnOnce() -> Result<SystemTime, std::io::Error>,
 {
@@ -156,7 +153,6 @@ mod tests {
         );
         assert!(result.all_verified());
 
-        let now = SystemTime::now();
         let result = MetadataVerificationResult::new(
             VerificationResult::Verified,
             VerificationResult::Skipped,
@@ -167,7 +163,6 @@ mod tests {
 
     #[test]
     fn test_metadata_verification_result_some_skipped() {
-        let now = SystemTime::now();
         let result = MetadataVerificationResult::new(
             VerificationResult::Verified,
             VerificationResult::Verified,
