@@ -1,5 +1,5 @@
+use serde::Serialize;
 use serde::ser::SerializeStruct;
-use serde::{Serialize};
 use std::time::SystemTime;
 
 /// The reason why a verification failed

@@ -12,7 +12,8 @@ use std::vec::Vec;
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigData {
     zip: PathBuf,
-    repo: PathBuf,
+    repo: String,
+    branch: String,
     usernames: Vec<String>,
     start_time: u64,
     end_time: u64,
@@ -44,6 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:?}", &data);
 
     // Check git
+    let github_repo = git_tools::repository::GithubRepo::new(&data.repo, &data.branch)?;
+
     let repo_constraints = git_tools::metadata::MetadataConstraints {
         first_commit_time: Some(
             system_time_from_unix_secs(data.start_time)..system_time_from_unix_secs(data.end_time),
@@ -52,7 +55,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             system_time_from_unix_secs(data.start_time)..system_time_from_unix_secs(data.end_time),
         ),
     };
-    let repo_check_res = git_tools::metadata::check_metadata_at_path(&data.repo, repo_constraints);
+    let repo_check_res =
+        git_tools::metadata::check_metadata_at_path(&github_repo.local_path, repo_constraints);
+
+    github_repo.destroy();
+
     println!("Check result: {:?}", repo_check_res);
 
     let serialized = serde_json::to_string_pretty(&repo_check_res)?;
