@@ -1,3 +1,3 @@
 mod metadata;
-mod verification;
 mod repository;
+mod verification;
