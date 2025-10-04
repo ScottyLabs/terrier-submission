@@ -1,5 +1,6 @@
 use crate::git_tools::verification::{FailureReason, VerificationResult};
 use git2::{Repository, Sort, Time as GitTime};
+use serde::Serialize;
 use std::ops::Range;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -36,7 +37,7 @@ impl MetadataConstraints {
 }
 
 /// The result of verifying a repository's metadata against a set of constraints.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct MetadataVerificationResult {
     /// Result of verifying the first (earliest) commit time
     pub first_commit_time: VerificationResult,

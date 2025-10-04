@@ -30,14 +30,16 @@ fn system_time_from_unix_secs(secs: u64) -> std::time::SystemTime {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let mut file =
-        File::open(&args.path).map_err(|_e| format!("The JSON file provided ('{}') does not exist.", &args.path))?;
+    let mut file = File::open(&args.path)
+        .map_err(|_e| format!("The JSON file provided ('{}') does not exist.", &args.path))?;
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
-    let data: ConfigData = serde_json::from_str(&contents)
-        .expect(&format!("The JSON file provided ('{}') is not a valid JSON file", &args.path));
+    let data: ConfigData = serde_json::from_str(&contents).expect(&format!(
+        "The JSON file provided ('{}') is not a valid JSON file",
+        &args.path
+    ));
 
     println!("{:?}", &data);
 
@@ -52,6 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let repo_check_res = git_tools::metadata::check_metadata_at_path(&data.repo, repo_constraints);
     println!("Check result: {:?}", repo_check_res);
+
+    let serialized = serde_json::to_string_pretty(&repo_check_res)?;
+    let mut output = File::create("result.json")?;
+    output.write_all(serialized.as_bytes())?;
 
     Ok(())
 }
