@@ -25,12 +25,13 @@ struct Args {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let mut file =
-        File::open(&args.path).map_err(|_e| format!("JSON file {} does not exist.", args.path))?;
+        File::open(&args.path).map_err(|_e| format!("The JSON file provided ('{}') does not exist.", &args.path))?;
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
-    let data: ConfigData = serde_json::from_str(&contents)?;
+    let data: ConfigData = serde_json::from_str(&contents)
+        .expect(&format!("The JSON file provided ('{}') is not a valid JSON file", &args.path));
 
     println!("{:?}", &data);
 
