@@ -26,7 +26,8 @@ struct Args {
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let mut file = File::open(args.path)?;
+    let mut file = File::open(args.path)
+        .map_err(|e| format!("JSON file path not found."))?;
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
