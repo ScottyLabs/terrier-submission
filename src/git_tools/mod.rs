@@ -1,3 +1,3 @@
-mod metadata;
-mod repository;
-mod verification;
+pub mod metadata;
+pub mod repository;
+pub mod verification;

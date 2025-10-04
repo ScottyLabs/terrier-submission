@@ -1,6 +1,7 @@
 {
 	"zip": "./src/data.json",
-	"repo": "name_of_repo",
+	"repo": "./",
 	"usernames": ["name_1", "name_2", "...", "name_k"],
-	"start_time": 1234
+	"start_time": 1758300104,
+    "end_time": 1758486504
 }

@@ -1,2 +1,2 @@
-mod metadata;
-mod verification;
+pub mod metadata;
+pub mod verification;

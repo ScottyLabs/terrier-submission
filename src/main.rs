@@ -6,20 +6,26 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::PathBuf;
 use std::vec::Vec;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigData {
-    zip: String,
-    repo: String,
+    zip: PathBuf,
+    repo: PathBuf,
     usernames: Vec<String>,
     start_time: u64,
+    end_time: u64,
 }
 
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(short, long, required = true)]
     path: String,
+}
+
+fn system_time_from_unix_secs(secs: u64) -> std::time::SystemTime {
+    std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,6 +39,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data: ConfigData = serde_json::from_str(&contents)?;
 
     println!("{:?}", &data);
+
+    // Check git
+    let repo_constraints = git_tools::metadata::MetadataConstraints {
+        first_commit_time: Some(
+            system_time_from_unix_secs(data.start_time)..system_time_from_unix_secs(data.end_time),
+        ),
+        last_commit_time: Some(
+            system_time_from_unix_secs(data.start_time)..system_time_from_unix_secs(data.end_time),
+        ),
+    };
+    let repo_check_res = git_tools::metadata::check_metadata_at_path(&data.repo, repo_constraints);
+    println!("Check result: {:?}", repo_check_res);
 
     Ok(())
 }
