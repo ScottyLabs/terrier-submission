@@ -102,12 +102,12 @@ fn verify_contributors(actual_contributors: &[String], expected_usernames: &[Str
     let expected_set: std::collections::HashSet<String> = expected_usernames.iter().cloned().collect();
     
     // Find unexpected contributors (contributors not in the expected list)
-    let unexpected: Vec<String> = actual_set.difference(&expected_set).cloned().collect();
+    let unauthorized_users: Vec<String> = actual_set.difference(&expected_set).cloned().collect();
     
-    if unexpected.is_empty() {
+    if unauthorized_users.is_empty() {
         VerificationResult::Verified
     } else {
-        VerificationResult::Failed(FailureReason::UsernameMismatch(unexpected))
+        VerificationResult::Failed(FailureReason::AdditionalUnauthorizedUsers(unauthorized_users))
     }
 }
 

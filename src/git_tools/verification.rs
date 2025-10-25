@@ -10,9 +10,8 @@ pub enum FailureReason {
     /// The actual time is not within the specified range
     /// The contained `SystemTime` is the actual time that failed the check
     TimeNotInRange(SystemTime),
-    /// The usernames don't match the expected contributors
-    /// The contained `Vec<String>` is the list of unexpected contributors
-    UsernameMismatch(Vec<String>),
+    /// Any users that were not provided but committed to the repo
+    AdditionalUnauthorizedUsers(Vec<String>)
 }
 
 impl Serialize for FailureReason {
@@ -36,7 +35,7 @@ impl Serialize for FailureReason {
                 state.serialize_field("actualTime", &secs)?;
                 state.end()
             }
-            FailureReason::UsernameMismatch(unexpected) => {
+            FailureReason::AdditionalUnauthorizedUsers(unexpected) => {
                 let mut state = serializer.serialize_struct("FailureReason", 2)?;
                 state.serialize_field("errorType", "UsernameMismatch")?;
                 state.serialize_field("unexpectedContributors", unexpected)?;

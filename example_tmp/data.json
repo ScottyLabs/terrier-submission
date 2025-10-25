@@ -1,8 +1,8 @@
 {
 	"zip": "./src/data.json",
-	"repo": "https://github.com/ScottyLabs/terrier-submission/",
+	"repo": "https://github.com/KothurVidur/NeuralNetwork",
     "branch": "main",
-	"usernames": ["name_1", "name_2", "...", "name_k"],
-	"start_time": 1758300104,
-    "end_time": 1758486504
+	"usernames": [],
+	"start_time": 0,
+    "end_time": 175848650400
 }
