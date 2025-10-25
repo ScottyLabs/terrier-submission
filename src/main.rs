@@ -44,7 +44,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("{:?}", &data);
 
-    // Check git
     let github_repo = git_tools::repository::GithubRepo::new(&data.repo, &data.branch)?;
 
     let repo_constraints = git_tools::metadata::MetadataConstraints {
@@ -54,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         last_commit_time: Some(
             system_time_from_unix_secs(data.start_time)..system_time_from_unix_secs(data.end_time),
         ),
+        usernames: Some(data.usernames),
     };
     let repo_check_res =
         git_tools::metadata::check_metadata_at_path(&github_repo.local_path, repo_constraints);

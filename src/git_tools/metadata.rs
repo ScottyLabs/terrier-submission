@@ -13,6 +13,8 @@ pub struct MetadataConstraints {
     pub first_commit_time: Option<Range<SystemTime>>,
     /// Range of allowed last (latest) commit time
     pub last_commit_time: Option<Range<SystemTime>>,
+    /// List of expected usernames/contributors
+    pub usernames: Option<Vec<String>>,
 }
 
 impl MetadataConstraints {
@@ -21,6 +23,7 @@ impl MetadataConstraints {
         Self {
             first_commit_time: None,
             last_commit_time: None,
+            usernames: None,
         }
     }
 
@@ -28,10 +31,12 @@ impl MetadataConstraints {
     pub fn new(
         first_commit_time: Option<Range<SystemTime>>,
         last_commit_time: Option<Range<SystemTime>>,
+        usernames: Option<Vec<String>>,
     ) -> Self {
         Self {
             first_commit_time,
             last_commit_time,
+            usernames,
         }
     }
 }
@@ -43,14 +48,17 @@ pub struct MetadataVerificationResult {
     pub first_commit_time: VerificationResult,
     /// Result of verifying the last (latest) commit time
     pub last_commit_time: VerificationResult,
+    /// Result of verifying the contributors/usernames
+    pub contributors: VerificationResult,
 }
 
 impl MetadataVerificationResult {
     /// Create a new `MetadataVerificationResult`
-    pub fn new(first: VerificationResult, last: VerificationResult) -> Self {
+    pub fn new(first: VerificationResult, last: VerificationResult, contributors: VerificationResult) -> Self {
         Self {
             first_commit_time: first,
             last_commit_time: last,
+            contributors,
         }
     }
 
@@ -58,6 +66,7 @@ impl MetadataVerificationResult {
     pub fn all_verified(&self) -> bool {
         matches!(self.first_commit_time, VerificationResult::Verified)
             && matches!(self.last_commit_time, VerificationResult::Verified)
+            && matches!(self.contributors, VerificationResult::Verified)
     }
 
     /// Returns true if all fields are verified or skipped
@@ -66,6 +75,39 @@ impl MetadataVerificationResult {
             || matches!(self.first_commit_time, VerificationResult::Skipped))
             && (matches!(self.last_commit_time, VerificationResult::Verified)
                 || matches!(self.last_commit_time, VerificationResult::Skipped))
+            && (matches!(self.contributors, VerificationResult::Verified)
+                || matches!(self.contributors, VerificationResult::Skipped))
+    }
+}
+
+fn get_repository_contributors(repo: &Repository) -> Result<Vec<String>, git2::Error> {
+    let mut walk = repo.revwalk()?;
+    walk.push_head()?;
+    
+    let mut contributors = std::collections::HashSet::new();
+    
+    for oid in walk {
+        let oid = oid?;
+        let commit = repo.find_commit(oid)?;
+        let author = commit.author();
+        let author_name = author.name().unwrap_or("Unknown").to_string();
+        contributors.insert(author_name);
+    }
+    
+    Ok(contributors.into_iter().collect())
+}
+
+fn verify_contributors(actual_contributors: &[String], expected_usernames: &[String]) -> VerificationResult {
+    let actual_set: std::collections::HashSet<String> = actual_contributors.iter().cloned().collect();
+    let expected_set: std::collections::HashSet<String> = expected_usernames.iter().cloned().collect();
+    
+    // Find unexpected contributors (contributors not in the expected list)
+    let unexpected: Vec<String> = actual_set.difference(&expected_set).cloned().collect();
+    
+    if unexpected.is_empty() {
+        VerificationResult::Verified
+    } else {
+        VerificationResult::Failed(FailureReason::UsernameMismatch(unexpected))
     }
 }
 
@@ -161,6 +203,9 @@ pub fn check_metadata_at_path<P: AsRef<Path>>(
             VerificationResult::Failed(FailureReason::GitError(git2::Error::from_str(
                 "failed to open repository (see first error)",
             ))),
+            VerificationResult::Failed(FailureReason::GitError(git2::Error::from_str(
+                "failed to open repository (see first error)",
+            ))),
         ),
     }
 }
@@ -178,7 +223,18 @@ pub fn check_metadata(
         constraints.last_commit_time.as_ref(),
         latest_commit_time(repo),
     );
-    MetadataVerificationResult::new(first_result, last_result)
+    
+    let contributors_result = match constraints.usernames {
+        Some(expected_usernames) => {
+            match get_repository_contributors(repo) {
+                Ok(actual_contributors) => verify_contributors(&actual_contributors, &expected_usernames),
+                Err(e) => VerificationResult::Failed(FailureReason::GitError(e)),
+            }
+        }
+        None => VerificationResult::Skipped,
+    };
+    
+    MetadataVerificationResult::new(first_result, last_result, contributors_result)
 }
 
 #[cfg(test)]
@@ -244,9 +300,10 @@ mod tests {
         let now = SystemTime::now();
         let before = now - Duration::from_secs(3600);
         let after = now + Duration::from_secs(3600);
-        let c = MetadataConstraints::new(Some(before..after), Some(before..after));
+        let c = MetadataConstraints::new(Some(before..after), Some(before..after), None);
         assert_eq!(c.first_commit_time, Some(before..after));
         assert_eq!(c.last_commit_time, Some(before..after));
+        assert_eq!(c.usernames, None);
     }
 
     #[test]
@@ -263,14 +320,15 @@ mod tests {
     fn test_check_metadata_verified_ranges() {
         let (_dir, repo, t) = init_repo_with_one_commit();
         let dur = Duration::from_secs(5);
-        let c = MetadataConstraints::new(Some((t - dur)..(t + dur)), Some((t - dur)..(t + dur)));
+        let c = MetadataConstraints::new(Some((t - dur)..(t + dur)), Some((t - dur)..(t + dur)), None);
         let res = check_metadata(&repo, c);
         assert!(matches!(
             res.first_commit_time,
             VerificationResult::Verified
         ));
         assert!(matches!(res.last_commit_time, VerificationResult::Verified));
-        assert!(res.all_verified());
+        assert!(matches!(res.contributors, VerificationResult::Skipped));
+        assert!(res.all_verified_or_skipped());
     }
 
     #[test]
@@ -279,6 +337,7 @@ mod tests {
         let c = MetadataConstraints::new(
             Some((t + Duration::from_secs(10))..(t + Duration::from_secs(20))),
             Some((t + Duration::from_secs(10))..(t + Duration::from_secs(20))),
+            None,
         );
         let res = check_metadata(&repo, c);
         match res.first_commit_time {
@@ -289,6 +348,7 @@ mod tests {
             VerificationResult::Failed(TimeNotInRange(actual)) => assert_eq!(actual, t),
             other => panic!("expected Failed(TimeNotInRange) for last, got {:?}", other),
         }
+        assert!(matches!(res.contributors, VerificationResult::Skipped));
         assert!(!res.all_verified());
         assert!(!res.all_verified_or_skipped());
     }

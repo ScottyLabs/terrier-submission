@@ -1,0 +1,8 @@
+{
+    "zip": "./src/main.rs",
+    "repo": "https://github.com/gstavya/cmu-compete",
+    "branch": "main",
+    "usernames": ["gstavya", "Stavya Gaonkar"],
+    "start_time": 1700000000,
+    "end_time": 2000000000
+}
