@@ -1,6 +1,7 @@
 mod file_tools;
 mod git_tools;
 mod zip_tools;
+mod plag_check;
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
