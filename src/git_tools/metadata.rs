@@ -54,7 +54,11 @@ pub struct MetadataVerificationResult {
 
 impl MetadataVerificationResult {
     /// Create a new `MetadataVerificationResult`
-    pub fn new(first: VerificationResult, last: VerificationResult, contributors: VerificationResult) -> Self {
+    pub fn new(
+        first: VerificationResult,
+        last: VerificationResult,
+        contributors: VerificationResult,
+    ) -> Self {
         Self {
             first_commit_time: first,
             last_commit_time: last,
@@ -83,9 +87,9 @@ impl MetadataVerificationResult {
 fn get_repository_contributors(repo: &Repository) -> Result<Vec<String>, git2::Error> {
     let mut walk = repo.revwalk()?;
     walk.push_head()?;
-    
+
     let mut contributors = std::collections::HashSet::new();
-    
+
     for oid in walk {
         let oid = oid?;
         let commit = repo.find_commit(oid)?;
@@ -93,21 +97,28 @@ fn get_repository_contributors(repo: &Repository) -> Result<Vec<String>, git2::E
         let author_name = author.name().unwrap_or("Unknown").to_string();
         contributors.insert(author_name);
     }
-    
+
     Ok(contributors.into_iter().collect())
 }
 
-fn verify_contributors(actual_contributors: &[String], expected_usernames: &[String]) -> VerificationResult {
-    let actual_set: std::collections::HashSet<String> = actual_contributors.iter().cloned().collect();
-    let expected_set: std::collections::HashSet<String> = expected_usernames.iter().cloned().collect();
-    
+fn verify_contributors(
+    actual_contributors: &[String],
+    expected_usernames: &[String],
+) -> VerificationResult {
+    let actual_set: std::collections::HashSet<String> =
+        actual_contributors.iter().cloned().collect();
+    let expected_set: std::collections::HashSet<String> =
+        expected_usernames.iter().cloned().collect();
+
     // Find unexpected contributors (contributors not in the expected list)
     let unauthorized_users: Vec<String> = actual_set.difference(&expected_set).cloned().collect();
-    
+
     if unauthorized_users.is_empty() {
         VerificationResult::Verified
     } else {
-        VerificationResult::Failed(FailureReason::AdditionalUnauthorizedUsers(unauthorized_users))
+        VerificationResult::Failed(FailureReason::AdditionalUnauthorizedUsers(
+            unauthorized_users,
+        ))
     }
 }
 
@@ -223,17 +234,17 @@ pub fn check_metadata(
         constraints.last_commit_time.as_ref(),
         latest_commit_time(repo),
     );
-    
+
     let contributors_result = match constraints.usernames {
-        Some(expected_usernames) => {
-            match get_repository_contributors(repo) {
-                Ok(actual_contributors) => verify_contributors(&actual_contributors, &expected_usernames),
-                Err(e) => VerificationResult::Failed(FailureReason::GitError(e)),
+        Some(expected_usernames) => match get_repository_contributors(repo) {
+            Ok(actual_contributors) => {
+                verify_contributors(&actual_contributors, &expected_usernames)
             }
-        }
+            Err(e) => VerificationResult::Failed(FailureReason::GitError(e)),
+        },
         None => VerificationResult::Skipped,
     };
-    
+
     MetadataVerificationResult::new(first_result, last_result, contributors_result)
 }
 
@@ -320,7 +331,8 @@ mod tests {
     fn test_check_metadata_verified_ranges() {
         let (_dir, repo, t) = init_repo_with_one_commit();
         let dur = Duration::from_secs(5);
-        let c = MetadataConstraints::new(Some((t - dur)..(t + dur)), Some((t - dur)..(t + dur)), None);
+        let c =
+            MetadataConstraints::new(Some((t - dur)..(t + dur)), Some((t - dur)..(t + dur)), None);
         let res = check_metadata(&repo, c);
         assert!(matches!(
             res.first_commit_time,

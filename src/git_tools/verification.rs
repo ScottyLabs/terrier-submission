@@ -11,7 +11,7 @@ pub enum FailureReason {
     /// The contained `SystemTime` is the actual time that failed the check
     TimeNotInRange(SystemTime),
     /// Any users that were not provided but committed to the repo
-    AdditionalUnauthorizedUsers(Vec<String>)
+    AdditionalUnauthorizedUsers(Vec<String>),
 }
 
 impl Serialize for FailureReason {
