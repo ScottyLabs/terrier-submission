@@ -1,3 +1,1 @@
-mod prereq_check;
-
-pub use prereq_check::check_prereq;
+pub mod prereq_check;
