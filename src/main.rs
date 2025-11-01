@@ -42,7 +42,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &args.path
     ));
 
-    println!("{:?}", &data);
+    println!("Input Data:\n{:?}", &data);
+    println!("\n----------------\n");
 
     let github_repo = git_tools::repository::GithubRepo::new(&data.repo, &data.branch)?;
 
@@ -60,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     github_repo.destroy();
 
-    println!("Check result: {:?}", repo_check_res);
+    println!("Result Data:\n{:?}", repo_check_res);
 
     let serialized = serde_json::to_string_pretty(&repo_check_res)?;
     let mut output = File::create("result.json")?;
