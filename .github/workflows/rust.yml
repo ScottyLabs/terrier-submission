@@ -16,8 +16,6 @@ jobs:
       release_built: ${{ steps.set-output.outputs.release_built }}
     steps:
       - uses: actions/checkout@v5
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - name: Build binaries in "${{ matrix.BUILD_TARGET }}" mode
         run: cargo build --profile ${{ matrix.BUILD_TARGET }}
       - name: Run tests in "${{ matrix.BUILD_TARGET }}" mode
@@ -29,8 +27,6 @@ jobs:
         BUILD_TARGET: [ test ]
     steps:
       - uses: actions/checkout@v5
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - name: Run tests in "${{ matrix.BUILD_TARGET }}" mode
         run: cargo test --profile ${{ matrix.BUILD_TARGET }}
   rustfmt:
