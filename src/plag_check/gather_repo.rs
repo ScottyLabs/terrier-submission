@@ -1,4 +1,4 @@
-use git2::Repository;
+use crate::git_tools::repository::GithubRepo;
 use octocrab::Octocrab;
 use std::path::PathBuf;
 
@@ -21,13 +21,15 @@ async fn gather_repo_urls_from_user(
 }
 
 async fn clone_repos_into_dir(
-    repo_urls: Vec<(String, String)>,
+    repo_urls: Vec<String>,
     target_dir: &PathBuf,
-) -> Result<(), git2::Error> {
-    for (url, branch) in repo_urls {
+) -> Result<Vec<GithubRepo>, git2::Error> {
+    let mut res = Vec::<GithubRepo>::new();
+    for url in repo_urls {
         let local_path = target_dir.join(&url);
-        let repo = Repository::clone(&*url, &local_path)?;
+        let repo = GithubRepo::new_with_local_path(&*url, local_path.to_str().unwrap())?;
+        res.push(repo);
     }
 
-    Ok(())
+    Ok(res)
 }

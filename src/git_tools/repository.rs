@@ -58,10 +58,14 @@ pub struct GithubRepo {
 impl GithubRepo {
     pub fn new(link: &str) -> Result<Self, git2::Error> {
         let local_path = format!("/tmp/repo_{}", uuid::Uuid::new_v4());
+        Self::new_with_local_path(link, &local_path)
+    }
+
+    pub fn new_with_local_path(link: &str, local_path: &str) -> Result<Self, git2::Error> {
         let repo = Repository::clone(link, &local_path)?;
         Ok(Self {
             url: link.to_string(),
-            local_path,
+            local_path: local_path.to_string(),
             repo,
         })
     }

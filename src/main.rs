@@ -67,16 +67,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         last_commit_time: Some(
             system_time_from_unix_secs(data.start_time)..system_time_from_unix_secs(data.end_time),
         ),
-        usernames: Some(data.usernames),
+        usernames: Some(data.usernames.clone()),
     };
     let repo_check_res =
         git_tools::metadata::check_metadata_at_path(&github_repo.local_path, repo_constraints);
 
-    println!("Running copydetect...");
-    run_copydetect(
-        vec![&*github_repo.local_path],
-        vec![&*github_repo.local_path],
-    );
+    let copydetect_path = PathBuf::from("/tmp/repo_copydetect");
+    for user in data.usernames {}
+
+    // println!("Running copydetect...");
+    // run_copydetect(
+    //     vec![&*github_repo.local_path],
+    //     vec![&*github_repo.local_path],
+    // );
     // TODO: move report.html to output/
 
     github_repo.destroy();
