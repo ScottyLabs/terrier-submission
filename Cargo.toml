@@ -11,3 +11,4 @@ git2 = "0.20.2"
 uuid = { version = "1.18.1", features = ["v4", "fast-rng"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.228", features = ["derive"] }
+regex = "1.12.2"
