@@ -1,8 +1,10 @@
 mod file_tools;
 mod git_tools;
-mod zip_tools;
 mod plag_check;
+mod zip_tools;
 
+use crate::plag_check::copydetect::run_copydetect;
+use crate::plag_check::prereq_check::check_prereq;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -31,6 +33,17 @@ fn system_time_from_unix_secs(secs: u64) -> std::time::SystemTime {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if !check_prereq() {
+        println!(
+            "Missing required tool 'copydetect'. Please install it and ensure it is on your PATH.\n\
+             Try one of the following:\n\
+               - pipx install copydetect\n\
+               - pip install copydetect\n\
+               - uv tool install copydetect"
+        );
+        return Err("Missing required tool 'copydetect'.".into());
+    }
+
     let args = Args::parse();
     let mut file = File::open(&args.path)
         .map_err(|_e| format!("The JSON file provided ('{}') does not exist.", &args.path))?;
@@ -60,6 +73,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let repo_check_res =
         git_tools::metadata::check_metadata_at_path(&github_repo.local_path, repo_constraints);
 
+    println!("Running copydetect...");
+    run_copydetect(
+        vec![&*github_repo.local_path],
+        vec![&*github_repo.local_path],
+    );
+    // TODO: move report.html to output/
+
     github_repo.destroy();
 
     println!("Result Data:\n{:?}", repo_check_res);
@@ -67,6 +87,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let serialized = serde_json::to_string_pretty(&repo_check_res)?;
     let mut output = File::create("result.json")?;
     output.write_all(serialized.as_bytes())?;
+
+    // Create output directory, clearing if exists
+    std::fs::remove_dir_all("output").ok();
+    std::fs::create_dir("output")?;
+
+    // Move files to output directory
+    std::fs::rename("report.html", "output/report.html")?;
+    std::fs::rename("result.json", "output/result.json")?;
 
     Ok(())
 }
