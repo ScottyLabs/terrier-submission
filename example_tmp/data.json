@@ -1,7 +1,11 @@
 {
-	"zip": "./example_tmp/code.zip",
-	"repo": "https://github.com/KothurVidur/NeuralNetwork",
-	"usernames": ["KothurVidur", "SnowballSH"],
-	"start_time": 0,
-    "end_time": 175848650400
+  "zip": "./example_tmp/code.zip",
+  "repo": "https://github.com/jnlt3/marlinflow",
+  "usernames": [
+    "KothurVidur",
+    "SnowballSH",
+    "jnlt3"
+  ],
+  "start_time": 0,
+  "end_time": 175848650400
 }

@@ -1,12 +1,19 @@
 use crate::git_tools::repository::GithubRepo;
-use octocrab::Octocrab;
+use octocrab::{Octocrab, params};
 use std::path::PathBuf;
 
 pub async fn gather_repo_urls_and_sizes_from_user(
     octocrab: &Octocrab,
     username: &str,
 ) -> octocrab::Result<Vec<(String, u32)>> {
-    let repos_page = octocrab.users(username).repos().per_page(20).send().await?;
+    let repos_page = octocrab
+        .users(username)
+        .repos()
+        .sort(params::repos::Sort::Updated)
+        .direction(params::Direction::Descending)
+        .per_page(50)
+        .send()
+        .await?;
 
     let mut res = Vec::<(String, u32)>::new();
 
@@ -32,7 +39,7 @@ pub async fn clone_repos_into_dir(
         if total_cumulative_size + size < size_threshold_kb {
             total_cumulative_size += size;
             let local_path = target_dir.join(&url);
-            let repo = GithubRepo::new_with_local_path(&*url, local_path.to_str().unwrap())?;
+            let repo = GithubRepo::new_with_local_path(&*url, local_path.to_str().unwrap(), true)?;
             res.push(repo);
         }
     }

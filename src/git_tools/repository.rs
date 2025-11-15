@@ -57,19 +57,27 @@ pub struct GithubRepo {
 }
 
 impl GithubRepo {
-    pub fn new(link: &str) -> Result<Self, git2::Error> {
+    pub fn new(link: &str, shallow: bool) -> Result<Self, git2::Error> {
         let local_path = format!("/tmp/repo_{}", uuid::Uuid::new_v4());
-        Self::new_with_local_path(link, &local_path)
+        Self::new_with_local_path(link, &local_path, shallow)
     }
 
-    pub fn new_with_local_path(link: &str, local_path: &str) -> Result<Self, git2::Error> {
+    pub fn new_with_local_path(
+        link: &str,
+        local_path: &str,
+        shallow: bool,
+    ) -> Result<Self, git2::Error> {
         eprintln!("Creating new Github repo at {}", &local_path);
         eprintln!("Cloning: {}", link);
-        let mut opt = FetchOptions::new();
-        opt.depth(1);
-        let repo = RepoBuilder::new()
-            .fetch_options(opt)
-            .clone(link, (&local_path).as_ref())?;
+        let repo = if shallow {
+            let mut opt = FetchOptions::new();
+            opt.depth(1);
+            RepoBuilder::new()
+                .fetch_options(opt)
+                .clone(link, (&local_path).as_ref())?
+        } else {
+            Repository::clone(&link, &local_path)?
+        };
         Ok(Self {
             url: link.to_string(),
             local_path: local_path.to_string(),
@@ -196,7 +204,7 @@ mod github_tests {
     #[test]
     fn test_github_repo_creation_time() {
         let repo_url = "https://github.com/ScottyLabs/terrier-submission";
-        let github_repo = GithubRepo::new(repo_url).expect("clone repo");
+        let github_repo = GithubRepo::new(repo_url, false).expect("clone repo");
         let creation_time = github_repo.get_creation_time();
         // Sep 20 2025 4:28 PM EDT
         // 1758400104
@@ -208,7 +216,7 @@ mod github_tests {
     #[test]
     fn test_github_repo_invalid_url() {
         let repo_url = "https://github.com/ScottyLabs/terrier-submission-bad-url";
-        let result = GithubRepo::new(repo_url);
+        let result = GithubRepo::new(repo_url, false);
         assert!(result.is_err());
     }
 }
