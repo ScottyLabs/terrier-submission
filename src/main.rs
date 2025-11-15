@@ -16,7 +16,6 @@ use std::vec::Vec;
 struct ConfigData {
     zip: PathBuf,
     repo: String,
-    branch: String,
     usernames: Vec<String>,
     start_time: u64,
     end_time: u64,
@@ -59,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Input Data:\n{:?}", &data);
     println!("\n----------------\n");
 
-    let github_repo = git_tools::repository::GithubRepo::new(&data.repo, &data.branch)?;
+    let github_repo = git_tools::repository::GithubRepo::new(&data.repo)?;
 
     let repo_constraints = git_tools::metadata::MetadataConstraints {
         first_commit_time: Some(

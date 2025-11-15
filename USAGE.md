@@ -7,11 +7,10 @@ This program is run in the following manner:
 ```cargo run -- --path <path_to_json_file>```
 
 We expect that the path leads to a JSON file in the following format:
-```
+```json
 {
     "zip": "<path_to_json_file>",
 	"repo": "<link_to_github_repository>",
-    "branch": "<name_of_branch>",
 	"usernames": ["github_username_1", "github_username_2", ..., "github_username_n"],
 	"start_time": <u64_seconds_since_epoch>,
     "end_time": <u64_seconds_since_epoch>
@@ -19,7 +18,7 @@ We expect that the path leads to a JSON file in the following format:
 ```
 
 We return an output log with the following format:
-```
+```json
 {
   "first_commit_time": "Verified/Failed",
   "last_commit_time": "Verified/Failed"
@@ -29,7 +28,7 @@ We return an output log with the following format:
 If a certain time field was verified, then the status of "Verified" remains "Verified".
 If a certain time field was not verified, then a failure object returns and is one of two types:
 
-```
+```json
 {
   "first_commit_time": {
     "Failed": {

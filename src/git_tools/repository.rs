@@ -51,18 +51,16 @@ pub fn get_creation_time(repo: &Repository) -> SystemTime {
 
 pub struct GithubRepo {
     pub url: String,
-    pub branch: String,
     pub local_path: String,
     pub repo: Repository,
 }
 
 impl GithubRepo {
-    pub fn new(link: &str, branch: &str) -> Result<Self, git2::Error> {
+    pub fn new(link: &str) -> Result<Self, git2::Error> {
         let local_path = format!("/tmp/repo_{}", uuid::Uuid::new_v4());
         let repo = Repository::clone(link, &local_path)?;
         Ok(Self {
             url: link.to_string(),
-            branch: branch.to_string(),
             local_path,
             repo,
         })
@@ -187,8 +185,7 @@ mod github_tests {
     #[test]
     fn test_github_repo_creation_time() {
         let repo_url = "https://github.com/ScottyLabs/terrier-submission";
-        let branch = "main";
-        let github_repo = GithubRepo::new(repo_url, branch).expect("clone repo");
+        let github_repo = GithubRepo::new(repo_url).expect("clone repo");
         let creation_time = github_repo.get_creation_time();
         // Sep 20 2025 4:28 PM EDT
         // 1758400104
@@ -200,8 +197,7 @@ mod github_tests {
     #[test]
     fn test_github_repo_invalid_url() {
         let repo_url = "https://github.com/ScottyLabs/terrier-submission-bad-url";
-        let branch = "main";
-        let result = GithubRepo::new(repo_url, branch);
+        let result = GithubRepo::new(repo_url);
         assert!(result.is_err());
     }
 }
