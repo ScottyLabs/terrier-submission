@@ -2,11 +2,11 @@ use crate::git_tools::repository::GithubRepo;
 use octocrab::Octocrab;
 use std::path::PathBuf;
 
-async fn gather_repo_urls_from_user(
-    octocrab: Octocrab,
+pub async fn gather_repo_urls_from_user(
+    octocrab: &Octocrab,
     username: &str,
 ) -> octocrab::Result<Vec<String>> {
-    let repos_page = octocrab.users(username).repos().per_page(20).send().await?;
+    let repos_page = octocrab.users(username).repos().per_page(10).send().await?;
 
     let mut res = Vec::<String>::new();
 
@@ -20,9 +20,9 @@ async fn gather_repo_urls_from_user(
     Ok(res)
 }
 
-async fn clone_repos_into_dir(
-    repo_urls: Vec<String>,
-    target_dir: &PathBuf,
+pub async fn clone_repos_into_dir(
+    repo_urls: &Vec<String>,
+    target_dir: PathBuf,
 ) -> Result<Vec<GithubRepo>, git2::Error> {
     let mut res = Vec::<GithubRepo>::new();
     for url in repo_urls {

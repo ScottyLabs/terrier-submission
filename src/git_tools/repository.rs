@@ -1,4 +1,5 @@
-use git2::{Repository, Sort};
+use git2::build::RepoBuilder;
+use git2::{FetchOptions, Repository, Sort};
 use std::time::{Duration, SystemTime};
 
 /// Get the repository creation time, defined as the timestamp of the oldest commit reachable
@@ -62,7 +63,13 @@ impl GithubRepo {
     }
 
     pub fn new_with_local_path(link: &str, local_path: &str) -> Result<Self, git2::Error> {
-        let repo = Repository::clone(link, &local_path)?;
+        eprintln!("Creating new Github repo at {}", &local_path);
+        eprintln!("Cloning: {}", link);
+        let mut opt = FetchOptions::new();
+        opt.depth(1);
+        let repo = RepoBuilder::new()
+            .fetch_options(opt)
+            .clone(link, (&local_path).as_ref())?;
         Ok(Self {
             url: link.to_string(),
             local_path: local_path.to_string(),

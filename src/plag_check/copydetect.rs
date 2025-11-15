@@ -16,6 +16,7 @@ pub fn run_copydetect(test_dirs: Vec<&str>, ref_dirs: Vec<&str>) {
         "kt",    // Kotlin
         "swift", // Swift
         "dart",  // Dart
+        "zig",  // Zig
         // Systems Programming
         "c",   // C
         "cpp", // C++
@@ -38,6 +39,8 @@ pub fn run_copydetect(test_dirs: Vec<&str>, ref_dirs: Vec<&str>) {
     let mut try_spawn = Command::new("copydetect")
         .arg("-t")
         .args(test_dirs)
+        .arg("-r")
+        .args(ref_dirs)
         .arg("-e")
         .args(extensions)
         .arg("-a")

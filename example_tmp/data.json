@@ -1,7 +1,7 @@
 {
-	"zip": "./example_tmp/gombo.zip",
+	"zip": "./example_tmp/code.zip",
 	"repo": "https://github.com/KothurVidur/NeuralNetwork",
-	"usernames": ["KothurVidur"],
+	"usernames": ["KothurVidur", "SnowballSH"],
 	"start_time": 0,
     "end_time": 175848650400
 }

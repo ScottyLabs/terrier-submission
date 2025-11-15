@@ -4,6 +4,7 @@ mod plag_check;
 mod zip_tools;
 
 use crate::plag_check::copydetect::run_copydetect;
+use crate::plag_check::gather_repo::{clone_repos_into_dir, gather_repo_urls_from_user};
 use crate::plag_check::prereq_check::check_prereq;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -31,7 +32,8 @@ fn system_time_from_unix_secs(secs: u64) -> std::time::SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs)
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !check_prereq() {
         println!(
             "Missing required tool 'copydetect'. Please install it and ensure it is on your PATH.\n\
@@ -73,7 +75,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         git_tools::metadata::check_metadata_at_path(&github_repo.local_path, repo_constraints);
 
     let copydetect_path = PathBuf::from("/tmp/repo_copydetect");
-    for user in data.usernames {}
+    std::fs::remove_dir_all(copydetect_path.clone()).ok();
+    std::fs::create_dir(copydetect_path.clone())?;
+    let octocrab = octocrab::Octocrab::builder().build()?;
+    let mut all_repos = vec![];
+    for user in data.usernames {
+        let urls = gather_repo_urls_from_user(&octocrab, &*user)
+            .await?
+            .iter()
+            .filter(|&x| *x != data.repo)
+            .cloned()
+            .collect::<Vec<_>>();
+        let repos = clone_repos_into_dir(&urls, copydetect_path.clone()).await?;
+        all_repos.extend(repos);
+    }
+
+    run_copydetect(
+        vec![&*github_repo.local_path],
+        all_repos
+            .iter()
+            .map(|x| &*x.local_path)
+            .collect::<Vec<&str>>(),
+    );
+
+    for repo in all_repos {
+        repo.destroy();
+    }
+    std::fs::remove_dir_all(copydetect_path.clone()).ok();
 
     // println!("Running copydetect...");
     // run_copydetect(
