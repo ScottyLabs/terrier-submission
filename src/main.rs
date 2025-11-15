@@ -4,7 +4,8 @@ mod plag_check;
 mod zip_tools;
 
 use crate::plag_check::copydetect::run_copydetect;
-use crate::plag_check::gather_repo::{clone_repos_into_dir, gather_repo_urls_from_user};
+use crate::plag_check::gather_repo::{clone_repos_into_dir, gather_repo_urls_and_sizes_from_user};
+use crate::plag_check::plag_result::{PlagiarismVerificationResult, copy_percentage_from_html};
 use crate::plag_check::prereq_check::check_prereq;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,21 @@ struct ConfigData {
     usernames: Vec<String>,
     start_time: u64,
     end_time: u64,
+    #[serde(default = "default_size_threshold")]
+    size_threshold_kb: u32,
+}
+
+fn default_size_threshold() -> u32 {
+    100_000 // ~100MB default
+}
+
+/// Combined verification result containing both metadata and plagiarism checks
+#[derive(Debug, Serialize)]
+struct VerificationOutput {
+    /// Metadata verification results (commit times, contributors)
+    metadata: git_tools::metadata::MetadataVerificationResult,
+    /// Plagiarism verification result (similarity percentage)
+    plagiarism: PlagiarismVerificationResult,
 }
 
 #[derive(Parser, Debug)]
@@ -80,13 +96,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let octocrab = octocrab::Octocrab::builder().build()?;
     let mut all_repos = vec![];
     for user in data.usernames {
-        let urls = gather_repo_urls_from_user(&octocrab, &*user)
+        let urls_with_sizes = gather_repo_urls_and_sizes_from_user(&octocrab, &*user)
             .await?
-            .iter()
-            .filter(|&x| *x != data.repo)
-            .cloned()
+            .into_iter()
+            .filter(|(url, _)| *url != data.repo)
             .collect::<Vec<_>>();
-        let repos = clone_repos_into_dir(&urls, copydetect_path.clone()).await?;
+        let repos =
+            clone_repos_into_dir(urls_with_sizes, &copydetect_path, data.size_threshold_kb).await?;
         all_repos.extend(repos);
     }
 
@@ -98,23 +114,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<&str>>(),
     );
 
+    // Clean up
     for repo in all_repos {
         repo.destroy();
     }
     std::fs::remove_dir_all(copydetect_path.clone()).ok();
 
-    // println!("Running copydetect...");
-    // run_copydetect(
-    //     vec![&*github_repo.local_path],
-    //     vec![&*github_repo.local_path],
-    // );
-    // TODO: move report.html to output/
-
     github_repo.destroy();
 
-    println!("Result Data:\n{:?}", repo_check_res);
+    let plag_score = copy_percentage_from_html(Some("report.html".parse().unwrap()));
+    let plag_res = PlagiarismVerificationResult::new(plag_score);
 
-    let serialized = serde_json::to_string_pretty(&repo_check_res)?;
+    // Create combined result
+    let verification_output = VerificationOutput {
+        metadata: repo_check_res,
+        plagiarism: plag_res,
+    };
+
+    println!("Result Data:\n{:?}", verification_output);
+
+    let serialized = serde_json::to_string_pretty(&verification_output)?;
     let mut output = File::create("result.json")?;
     output.write_all(serialized.as_bytes())?;
 

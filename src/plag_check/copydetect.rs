@@ -16,7 +16,7 @@ pub fn run_copydetect(test_dirs: Vec<&str>, ref_dirs: Vec<&str>) {
         "kt",    // Kotlin
         "swift", // Swift
         "dart",  // Dart
-        "zig",  // Zig
+        "zig",   // Zig
         // Systems Programming
         "c",   // C
         "cpp", // C++

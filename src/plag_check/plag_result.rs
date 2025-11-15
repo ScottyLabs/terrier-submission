@@ -2,10 +2,12 @@
 use crate::plag_check::verification::VerificationResult;
 
 use regex::Regex;
+use serde::Serialize;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
+#[derive(Debug, Serialize)]
 pub struct PlagiarismVerificationResult {
     pub result: VerificationResult,
 }
@@ -24,7 +26,7 @@ impl PlagiarismVerificationResult {
     }
 }
 
-fn copy_percentage_from_html(html_path: Option<PathBuf>) -> Option<f64> {
+pub fn copy_percentage_from_html(html_path: Option<PathBuf>) -> Option<f64> {
     if let Some(path) = html_path {
         if !path.exists() {
             panic!("The HTML file path provided does not exist: {:?}", path);
@@ -63,7 +65,7 @@ fn copy_percentage_from_html(html_path: Option<PathBuf>) -> Option<f64> {
             .parse::<f64>()
             .unwrap_or_else(|_| panic!("Failed to parse captured number '{}' as f64", y_str));
 
-        Some(y)
+        Some(y / 100.0)
     } else {
         None
     }
