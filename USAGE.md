@@ -33,6 +33,7 @@
 
 ## Outputs
 - `output/result.json`: Structured status for metadata (`Verified`, `Skipped`, or `Failed` with details) and plagiarism (`Verified(<decimal>)` or `ManualRequired`).
+- `output/result.json` also includes `github_issues` with any invalid/private/nonexistent repo or username problems.
 - `output/report.html`: The copydetect report when one was generated (copied even if the score could not be parsed).
 
 Example success:
@@ -47,7 +48,8 @@ Example success:
     "result": {
       "Verified": 0.08
     }
-  }
+  },
+  "github_issues": []
 }
 ```
 

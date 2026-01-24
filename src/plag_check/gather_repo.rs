@@ -77,19 +77,27 @@ pub async fn clone_repos_into_dir(
     repo_urls: Vec<(String, u32)>,
     target_dir: &Path,
     size_threshold_kb: u32,
-) -> Result<Vec<GithubRepo>, git2::Error> {
+    github_issues: &mut Vec<String>,
+) -> Vec<GithubRepo> {
     let mut res = Vec::<GithubRepo>::new();
     let mut total_cumulative_size: u32 = 0;
     for (url, size) in repo_urls {
         if total_cumulative_size + size < size_threshold_kb {
             total_cumulative_size += size;
             let local_path = target_dir.join(random_string(50));
-            let repo = GithubRepo::new_with_local_path(&*url, local_path.to_str().unwrap(), true)?;
-            if !is_dir_empty(&local_path).unwrap_or(true) {
-                res.push(repo);
+            match GithubRepo::new_with_local_path(&*url, local_path.to_str().unwrap(), true) {
+                Ok(repo) => {
+                    if !is_dir_empty(&local_path).unwrap_or(true) {
+                        res.push(repo);
+                    }
+                }
+                Err(err) => {
+                    github_issues.push(format!("Failed to clone repo '{}': {}", url, err));
+                    let _ = fs::remove_dir_all(&local_path);
+                }
             }
         }
     }
 
-    Ok(res)
+    res
 }

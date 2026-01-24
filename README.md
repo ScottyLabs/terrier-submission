@@ -7,6 +7,7 @@ Rust CLI that audits hackathon submissions by validating Git metadata and runnin
 - Ensures commit authors match the expected GitHub usernames.
 - Fetches other public repositories for the provided usernames (respecting a size cap) and runs copydetect against the submission.
 - Writes a JSON summary to `output/result.json` and, when available, copies the copydetect HTML report to `output/report.html`.
+- Records GitHub-related issues (e.g., invalid/private repos or usernames) in `output/result.json` instead of halting.
 
 ## Prerequisites
 - Rust toolchain (stable).
@@ -52,7 +53,8 @@ Rust CLI that audits hackathon submissions by validating Git metadata and runnin
     "result": {
       "Verified": 0.08
     }
-  }
+  },
+  "github_issues": []
 }
 ```
 Failures include structured error details (e.g., `GitError`, `TimeNotInRange`, `UsernameMismatch`), and plagiarism returns `ManualRequired` when copydetect cannot provide a score.

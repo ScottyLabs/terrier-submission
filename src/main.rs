@@ -37,6 +37,8 @@ struct VerificationOutput {
     metadata: git_tools::metadata::MetadataVerificationResult,
     /// Plagiarism verification result (similarity percentage)
     plagiarism: PlagiarismVerificationResult,
+    /// GitHub-related issues encountered during verification
+    github_issues: Vec<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -93,6 +95,22 @@ fn build_metadata_constraints(data: &ConfigData) -> git_tools::metadata::Metadat
     }
 }
 
+fn metadata_result_from_clone_error(
+    err: git2::Error,
+) -> git_tools::metadata::MetadataVerificationResult {
+    use crate::git_tools::verification::{FailureReason, VerificationResult};
+
+    git_tools::metadata::MetadataVerificationResult::new(
+        VerificationResult::Failed(FailureReason::GitError(err)),
+        VerificationResult::Failed(FailureReason::GitError(git2::Error::from_str(
+            "main repository clone failed (see first error)",
+        ))),
+        VerificationResult::Failed(FailureReason::GitError(git2::Error::from_str(
+            "main repository clone failed (see first error)",
+        ))),
+    )
+}
+
 async fn collect_user_repos(
     octocrab: &octocrab::Octocrab,
     usernames: &[String],
@@ -100,19 +118,36 @@ async fn collect_user_repos(
     copydetect_path: &Path,
     size_threshold_kb: u32,
     start_time: u64,
-) -> Result<Vec<git_tools::repository::GithubRepo>, Box<dyn std::error::Error>> {
+    clone_repos: bool,
+    github_issues: &mut Vec<String>,
+) -> Vec<git_tools::repository::GithubRepo> {
     let mut all_repos = vec![];
     for user in usernames {
-        let urls_with_sizes = gather_repo_urls_and_sizes_from_user(octocrab, user, start_time)
-            .await?
+        let urls_with_sizes = match gather_repo_urls_and_sizes_from_user(octocrab, user, start_time)
+            .await
+        {
+            Ok(urls) => urls,
+            Err(err) => {
+                github_issues.push(format!("Failed to list repos for user '{}': {}", user, err));
+                continue;
+            }
+        };
+        let urls_with_sizes = urls_with_sizes
             .into_iter()
             .filter(|(url, _)| *url != main_repo)
             .collect::<Vec<_>>();
-        let repos =
-            clone_repos_into_dir(urls_with_sizes, copydetect_path, size_threshold_kb).await?;
-        all_repos.extend(repos);
+        if clone_repos {
+            let repos = clone_repos_into_dir(
+                urls_with_sizes,
+                copydetect_path,
+                size_threshold_kb,
+                github_issues,
+            )
+            .await;
+            all_repos.extend(repos);
+        }
     }
-    Ok(all_repos)
+    all_repos
 }
 
 fn run_plagiarism_check(
@@ -202,10 +237,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Input Data:\n{:?}", &data);
     println!("\n----------------\n");
 
-    let github_repo = git_tools::repository::GithubRepo::new(&data.repo, false)?;
     let repo_constraints = build_metadata_constraints(&data);
-    let metadata_result =
-        git_tools::metadata::check_metadata_at_path(&github_repo.local_path, repo_constraints);
+    let mut github_issues = Vec::new();
+    let (github_repo, metadata_result) =
+        match git_tools::repository::GithubRepo::new(&data.repo, false) {
+            Ok(repo) => {
+                let metadata_result =
+                    git_tools::metadata::check_metadata_at_path(&repo.local_path, repo_constraints);
+                (Some(repo), metadata_result)
+            }
+            Err(err) => {
+                github_issues.push(format!(
+                    "Failed to clone main repo '{}': {}",
+                    data.repo, err
+                ));
+                (None, metadata_result_from_clone_error(err))
+            }
+        };
 
     let copydetect_path = PathBuf::from("/tmp/repo_copydetect");
     setup_copydetect_dir(&copydetect_path)?;
@@ -218,20 +266,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &copydetect_path,
         data.size_threshold_kb,
         data.start_time,
+        github_repo.is_some(),
+        &mut github_issues,
     )
-    .await?;
+    .await;
 
     // TODO: Check if repo is empty and return empty repo result if so
-    let plagiarism_result = run_plagiarism_check(
-        &github_repo.local_path,
-        &all_repos,
-        data.display_threshold,
-        &copydetect_path,
-    );
+    let plagiarism_result = match &github_repo {
+        Some(repo) => run_plagiarism_check(
+            &repo.local_path,
+            &all_repos,
+            data.display_threshold,
+            &copydetect_path,
+        ),
+        None => PlagiarismVerificationResult::manual(None),
+    };
 
     let verification_output = VerificationOutput {
         metadata: metadata_result,
         plagiarism: plagiarism_result,
+        github_issues,
     };
 
     println!("Result Data:\n{:?}", verification_output);
@@ -239,7 +293,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     save_results(&verification_output)?;
 
     cleanup_repos(all_repos, &copydetect_path);
-    github_repo.destroy();
+    if let Some(repo) = github_repo {
+        repo.destroy();
+    }
 
     Ok(())
 }
