@@ -51,9 +51,7 @@ pub fn get_creation_time(repo: &Repository) -> SystemTime {
 }
 
 pub struct GithubRepo {
-    pub url: String,
     pub local_path: String,
-    pub repo: Repository,
 }
 
 impl GithubRepo {
@@ -69,24 +67,18 @@ impl GithubRepo {
     ) -> Result<Self, git2::Error> {
         eprintln!("Creating new Github repo at {}", &local_path);
         eprintln!("Cloning: {}", link);
-        let repo = if shallow {
+        if shallow {
             let mut opt = FetchOptions::new();
             opt.depth(1);
             RepoBuilder::new()
                 .fetch_options(opt)
-                .clone(link, (&local_path).as_ref())?
+                .clone(link, (&local_path).as_ref())?;
         } else {
-            Repository::clone(&link, &local_path)?
-        };
+            Repository::clone(&link, &local_path)?;
+        }
         Ok(Self {
-            url: link.to_string(),
             local_path: local_path.to_string(),
-            repo,
         })
-    }
-
-    pub fn get_creation_time(&self) -> SystemTime {
-        get_creation_time(&self.repo)
     }
 
     pub fn destroy(self) {
@@ -193,30 +185,5 @@ mod tests {
         assert_eq!(creation, expected_time);
 
         let _ = fs::remove_dir_all(&dir);
-    }
-}
-
-#[cfg(test)]
-mod github_tests {
-    use super::GithubRepo;
-    use std::time::{Duration, SystemTime};
-
-    #[test]
-    fn test_github_repo_creation_time() {
-        let repo_url = "https://github.com/ScottyLabs/terrier-submission";
-        let github_repo = GithubRepo::new(repo_url, false).expect("clone repo");
-        let creation_time = github_repo.get_creation_time();
-        // Sep 20 2025 4:28 PM EDT
-        // 1758400104
-        let expected_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1758400104);
-        assert_eq!(creation_time, expected_time);
-        github_repo.destroy();
-    }
-
-    #[test]
-    fn test_github_repo_invalid_url() {
-        let repo_url = "https://github.com/ScottyLabs/terrier-submission-bad-url";
-        let result = GithubRepo::new(repo_url, false);
-        assert!(result.is_err());
     }
 }

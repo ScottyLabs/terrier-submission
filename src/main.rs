@@ -1,19 +1,14 @@
-mod file_tools;
 mod git_tools;
 mod plag_check;
-mod zip_tools;
 
-use crate::plag_check::copydetect::run_copydetect;
+use crate::plag_check::copydetect::{CopydetectError, run_copydetect};
 use crate::plag_check::gather_repo::{clone_repos_into_dir, gather_repo_urls_and_sizes_from_user};
 use crate::plag_check::plag_result::{PlagiarismVerificationResult, copy_percentage_from_html};
 use crate::plag_check::prereq_check::check_prereq;
-use crate::plag_check::verification::VerificationResult::{Verified, ManualRequired};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::PathBuf;
-use std::vec::Vec;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigData {
@@ -24,7 +19,7 @@ struct ConfigData {
     #[serde(default = "default_size_threshold")]
     size_threshold_kb: u32,
     #[serde(default = "default_display_threshold")]
-    display_threshold: f32
+    display_threshold: f32,
 }
 
 fn default_size_threshold() -> u32 {
@@ -69,16 +64,19 @@ fn verify_prerequisites() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn load_config(path: &str) -> Result<ConfigData, Box<dyn std::error::Error>> {
-    let mut file = File::open(path)
-        .map_err(|_e| format!("The JSON file provided ('{}') does not exist.", path))?;
+    let contents = fs::read_to_string(path).map_err(|_e| {
+        format!(
+            "The JSON file provided ('{}') does not exist or could not be read.",
+            path
+        )
+    })?;
 
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-
-    let data: ConfigData = serde_json::from_str(&contents).expect(&format!(
-        "The JSON file provided ('{}') is not a valid JSON file",
-        path
-    ));
+    let data: ConfigData = serde_json::from_str(&contents).map_err(|err| {
+        format!(
+            "The JSON file provided ('{}') is not a valid JSON file: {}",
+            path, err
+        )
+    })?;
 
     Ok(data)
 }
@@ -99,9 +97,9 @@ async fn collect_user_repos(
     octocrab: &octocrab::Octocrab,
     usernames: &[String],
     main_repo: &str,
-    copydetect_path: &PathBuf,
+    copydetect_path: &Path,
     size_threshold_kb: u32,
-    start_time: u64
+    start_time: u64,
 ) -> Result<Vec<git_tools::repository::GithubRepo>, Box<dyn std::error::Error>> {
     let mut all_repos = vec![];
     for user in usernames {
@@ -120,19 +118,36 @@ async fn collect_user_repos(
 fn run_plagiarism_check(
     main_repo_path: &str,
     comparison_repos: &[git_tools::repository::GithubRepo],
-    display_threshold: f32
+    display_threshold: f32,
+    working_dir: &Path,
 ) -> PlagiarismVerificationResult {
     let comparison_paths: Vec<&str> = comparison_repos
         .iter()
-        .map(|repo| &*repo.local_path)
+        .map(|repo| repo.local_path.as_str())
         .collect();
 
-    let res = run_copydetect(vec![main_repo_path], comparison_paths, display_threshold);
-    if res.unwrap() == "Passed" {
-        let plag_score = copy_percentage_from_html(Some("report.html".parse().unwrap()));
-        PlagiarismVerificationResult::new(plag_score)
-    } else {
-        PlagiarismVerificationResult::new(None)
+    match run_copydetect(
+        &[main_repo_path],
+        &comparison_paths,
+        display_threshold,
+        working_dir,
+    ) {
+        Ok(Some(report_path)) => {
+            let plag_score = copy_percentage_from_html(&report_path);
+            PlagiarismVerificationResult::new(plag_score, Some(report_path))
+        }
+        Ok(None) => {
+            eprintln!("copydetect skipped because no comparison repositories were available.");
+            PlagiarismVerificationResult::manual(None)
+        }
+        Err(err) => {
+            eprintln!("copydetect failed: {}", err);
+            let report_path = match err {
+                CopydetectError::MissingReport(path) => Some(path),
+                _ => None,
+            };
+            PlagiarismVerificationResult::manual(report_path)
+        }
     }
 }
 
@@ -140,37 +155,41 @@ fn save_results(
     verification_output: &VerificationOutput,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = serde_json::to_string_pretty(verification_output)?;
-    let mut output = File::create("result.json")?;
-    output.write_all(serialized.as_bytes())?;
+    let output_dir = Path::new("output");
+    if output_dir.exists() {
+        fs::remove_dir_all(output_dir)?;
+    }
+    fs::create_dir_all(output_dir)?;
 
-    std::fs::remove_dir_all("output").ok();
-    std::fs::create_dir("output")?;
+    fs::write(output_dir.join("result.json"), serialized)?;
 
-    println!("Reached!");
-
-    match &verification_output.plagiarism.result {
-        Verified(percent) => {
-            std::fs::rename("report.html", "output/report.html")?;
+    if let Some(report_path) = &verification_output.plagiarism.report_path {
+        if report_path.exists() {
+            fs::copy(report_path, output_dir.join("report.html"))?;
+        } else {
+            eprintln!(
+                "copydetect report was expected at {}, but the file does not exist",
+                report_path.display()
+            );
         }
-        _ => {}
     }
 
-    std::fs::rename("result.json", "output/result.json")?;
-
     Ok(())
 }
 
-fn setup_copydetect_dir(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    std::fs::remove_dir_all(path).ok();
-    std::fs::create_dir(path)?;
+fn setup_copydetect_dir(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if path.exists() {
+        fs::remove_dir_all(path)?;
+    }
+    fs::create_dir_all(path)?;
     Ok(())
 }
 
-fn cleanup_repos(repos: Vec<git_tools::repository::GithubRepo>, copydetect_path: &PathBuf) {
+fn cleanup_repos(repos: Vec<git_tools::repository::GithubRepo>, copydetect_path: &Path) {
     for repo in repos {
         repo.destroy();
     }
-    std::fs::remove_dir_all(copydetect_path).ok();
+    let _ = fs::remove_dir_all(copydetect_path);
 }
 
 #[tokio::main]
@@ -198,15 +217,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &data.repo,
         &copydetect_path,
         data.size_threshold_kb,
-        data.start_time
+        data.start_time,
     )
     .await?;
 
-    //TODO: Check if repo is empty and return empty repo result if so
-    let plagiarism_result = run_plagiarism_check(&github_repo.local_path, &all_repos, data.display_threshold);
-
-    cleanup_repos(all_repos, &copydetect_path);
-    github_repo.destroy();
+    // TODO: Check if repo is empty and return empty repo result if so
+    let plagiarism_result = run_plagiarism_check(
+        &github_repo.local_path,
+        &all_repos,
+        data.display_threshold,
+        &copydetect_path,
+    );
 
     let verification_output = VerificationOutput {
         metadata: metadata_result,
@@ -216,6 +237,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Result Data:\n{:?}", verification_output);
 
     save_results(&verification_output)?;
+
+    cleanup_repos(all_repos, &copydetect_path);
+    github_repo.destroy();
 
     Ok(())
 }

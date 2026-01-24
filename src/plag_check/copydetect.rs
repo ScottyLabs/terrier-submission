@@ -1,112 +1,148 @@
+use std::fmt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
+use std::{error, io};
 
-/// Runs copydetect
-pub fn run_copydetect(test_dirs: Vec<&str>, ref_dirs: Vec<&str>, display_threshold: f32)  -> Result<&'static str, Box<dyn std::error::Error>> {
-    let extensions = vec![
-        // General Purpose & Web Backend
-        "py",    // Python
-        "js",    // JavaScript
-        "ts",    // TypeScript
-        "java",  // Java
-        "cs",    // C#
-        "go",    // Go
-        "rs",    // Rust
-        "rb",    // Ruby
-        "php",   // PHP
-        "kt",    // Kotlin
-        "swift", // Swift
-        "dart",  // Dart
-        "zig",   // Zig
-        "scala", // Scala
-        "clj",   // Clojure
-        "cljs",  // ClojureScript
-        "groovy",// Groovy
-        "vb",    // Visual Basic
-        "erl",   // Erlang
-        "ex",    // Elixir
-        "exs",   // Elixir Script
+const DEFAULT_EXTENSIONS: &[&str] = &[
+    // General Purpose & Web Backend
+    "py",
+    "js",
+    "ts",
+    "java",
+    "cs",
+    "go",
+    "rs",
+    "rb",
+    "php",
+    "kt",
+    "swift",
+    "dart",
+    "zig",
+    "scala",
+    "clj",
+    "cljs",
+    "groovy",
+    "vb",
+    "erl",
+    "ex",
+    "exs", // Systems Programming
+    "c",
+    "cpp",
+    "h",
+    "hpp",
+    "s",
+    "asm",
+    "ml",
+    "mli",
+    "nim",
+    "d", // Web Frontend
+    "html",
+    "css",
+    "scss",
+    "jsx",
+    "tsx",
+    "vue",
+    "svelte",
+    "astro",
+    "md",
+    "mdx", // Scripting & Data
+    "sh",
+    "ps1",
+    "sql",
+    "r",
+    "pl",
+    "lua",
+    "pyw",
+    "bat",
+    "cmd",
+    "awk",
+    "tcl",
+    "m",
+    "jl",
+    "yaml",
+    "yml",
+    "toml",
+    "ini", // Functional Languages
+    "hs",
+    "lhs",
+    "fs",
+    "fsi",
+    "fsscript", // Mobile / Cross‑Platform
+    "mm",       // Infra / Build / DevOps
+    "gradle",
+    "mk",
+    "dockerfile",
+    "tf",
+    "tfvars",
+];
 
-        // Systems Programming
-        "c",     // C
-        "cpp",   // C++
-        "h",     // C/C++ Header
-        "hpp",   // C++ Header
-        "s",     // Assembly
-        "asm",   // Assembly (alt)
-        "ml",    // OCaml / Standard ML
-        "mli",   // OCaml Interface
-        "nim",   // Nim
-        "d",     // D Language
+#[derive(Debug)]
+pub enum CopydetectError {
+    Spawn(io::Error),
+    NonZeroExit(Option<i32>),
+    MissingReport(PathBuf),
+}
 
-        // Web Frontend
-        "html",  // HTML
-        "css",   // CSS
-        "scss",  // SASS/SCSS
-        "jsx",   // JavaScript XML (React)
-        "tsx",   // TypeScript XML (React)
-        "vue",   // Vue SFC
-        "svelte",// Svelte
-        "astro", // Astro
-        "md",    // Markdown
-        "mdx",   // Markdown + JSX
+impl fmt::Display for CopydetectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CopydetectError::Spawn(err) => write!(f, "failed to spawn copydetect: {}", err),
+            CopydetectError::NonZeroExit(code) => {
+                write!(f, "copydetect exited with status {:?}", code)
+            }
+            CopydetectError::MissingReport(path) => {
+                write!(
+                    f,
+                    "copydetect did not produce a report at {}",
+                    path.display()
+                )
+            }
+        }
+    }
+}
 
-        // Scripting & Data
-        "sh",    // Shell Script
-        "ps1",   // PowerShell
-        "sql",   // SQL
-        "r",     // R
-        "pl",    // Perl
-        "lua",   // Lua
-        "pyw",   // Python (no console)
-        "bat",   // Windows Batch
-        "cmd",   // Windows Command Script
-        "awk",   // AWK
-        "tcl",   // Tcl
-        "m",     // MATLAB / Octave / Objective‑C (context‑dependent)
-        "jl",    // Julia
-        "yaml",  // YAML
-        "yml",   // YAML (alt)
-        "toml",  // TOML
-        "ini",   // INI Config
+impl error::Error for CopydetectError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            CopydetectError::Spawn(err) => Some(err),
+            _ => None,
+        }
+    }
+}
 
-        // Functional Languages
-        "hs",       // Haskell
-        "lhs",      // Literate Haskell
-        "fs",       // F#
-        "fsi",      // F# Script
-        "fsscript", // F# Script (alt)
-
-        // Mobile / Cross‑Platform
-        "mm",    // Objective‑C++
-        // "m" already included above
-
-        // Infra / Build / DevOps
-        "gradle", // Gradle Build
-        "mk",     // Makefile (alt)
-        "dockerfile", // Dockerfile
-        "tf",     // Terraform
-        "tfvars", // Terraform Variables
-    ];
-
-    if ref_dirs.len() == 0 {
-        return Ok("Manual")
+/// Runs copydetect and returns the path to the generated report, if any.
+pub fn run_copydetect(
+    test_dirs: &[&str],
+    ref_dirs: &[&str],
+    display_threshold: f32,
+    working_dir: &Path,
+) -> Result<Option<PathBuf>, CopydetectError> {
+    if ref_dirs.is_empty() {
+        return Ok(None);
     }
 
-    let mut try_spawn = Command::new("copydetect")
+    let status = Command::new("copydetect")
+        .current_dir(working_dir)
         .arg("-t")
         .args(test_dirs)
         .arg("-r")
         .args(ref_dirs)
         .arg("-e")
-        .args(extensions)
+        .args(DEFAULT_EXTENSIONS)
         .arg("-d")
-        .args(vec![format!("{}", display_threshold)])
+        .arg(display_threshold.to_string())
         .arg("-a")
-        .status();
-    if let Ok(status) = try_spawn {
-        return Ok("Passed")
+        .status()
+        .map_err(CopydetectError::Spawn)?;
+
+    if !status.success() {
+        return Err(CopydetectError::NonZeroExit(status.code()));
+    }
+
+    let report_path = working_dir.join("report.html");
+    if report_path.exists() {
+        Ok(Some(report_path))
     } else {
-        return Ok("Manual")
+        Err(CopydetectError::MissingReport(report_path))
     }
 }
