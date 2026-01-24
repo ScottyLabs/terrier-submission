@@ -5,20 +5,14 @@ use std::ops::Range;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// Constraints for a Git repository's timeline.
-/// In each constraint, `None` means no constraint is applied.
 #[derive(Debug, Clone)]
 pub struct MetadataConstraints {
-    /// Range of allowed first (earliest) commit time
     pub first_commit_time: Option<Range<SystemTime>>,
-    /// Range of allowed last (latest) commit time
     pub last_commit_time: Option<Range<SystemTime>>,
-    /// List of expected usernames/contributors
     pub usernames: Option<Vec<String>>,
 }
 
 impl MetadataConstraints {
-    /// Create an empty set of constraints (everything skipped)
     pub fn new_empty() -> Self {
         Self {
             first_commit_time: None,
@@ -27,7 +21,6 @@ impl MetadataConstraints {
         }
     }
 
-    /// Create a new `MetadataConstraints`
     pub fn new(
         first_commit_time: Option<Range<SystemTime>>,
         last_commit_time: Option<Range<SystemTime>>,
@@ -41,19 +34,14 @@ impl MetadataConstraints {
     }
 }
 
-/// The result of verifying a repository's metadata against a set of constraints.
 #[derive(Debug, Serialize)]
 pub struct MetadataVerificationResult {
-    /// Result of verifying the first (earliest) commit time
     pub first_commit_time: VerificationResult,
-    /// Result of verifying the last (latest) commit time
     pub last_commit_time: VerificationResult,
-    /// Result of verifying the contributors/usernames
     pub contributors: VerificationResult,
 }
 
 impl MetadataVerificationResult {
-    /// Create a new `MetadataVerificationResult`
     pub fn new(
         first: VerificationResult,
         last: VerificationResult,
@@ -66,14 +54,12 @@ impl MetadataVerificationResult {
         }
     }
 
-    /// Returns true if all fields are verified
     pub fn all_verified(&self) -> bool {
         matches!(self.first_commit_time, VerificationResult::Verified)
             && matches!(self.last_commit_time, VerificationResult::Verified)
             && matches!(self.contributors, VerificationResult::Verified)
     }
 
-    /// Returns true if all fields are verified or skipped
     pub fn all_verified_or_skipped(&self) -> bool {
         (matches!(self.first_commit_time, VerificationResult::Verified)
             || matches!(self.first_commit_time, VerificationResult::Skipped))
@@ -110,7 +96,6 @@ fn verify_contributors(
     let expected_set: std::collections::HashSet<String> =
         expected_usernames.iter().cloned().collect();
 
-    // Find unexpected contributors (contributors not in the expected list)
     let unauthorized_users: Vec<String> = actual_set.difference(&expected_set).cloned().collect();
 
     if unauthorized_users.is_empty() {
@@ -202,7 +187,6 @@ fn verify_time(
     }
 }
 
-/// Check the repository at `path` against the given constraints.
 pub fn check_metadata_at_path<P: AsRef<Path>>(
     path: P,
     constraints: MetadataConstraints,
@@ -221,7 +205,6 @@ pub fn check_metadata_at_path<P: AsRef<Path>>(
     }
 }
 
-/// Check the repository against the given constraints.
 pub fn check_metadata(
     repo: &Repository,
     constraints: MetadataConstraints,
@@ -271,13 +254,11 @@ mod tests {
         fs::create_dir_all(&dir).expect("create temp dir");
         let repo = Repository::init(&dir).expect("init repo");
 
-        // create a file
         let file_path = dir.join("README.md");
         let mut f = fs::File::create(&file_path).expect("create file");
         writeln!(f, "hello").ok();
         f.sync_all().ok();
 
-        // add and commit
         let mut index = repo.index().expect("index");
         index
             .add_path(std::path::Path::new("README.md"))
@@ -286,7 +267,6 @@ mod tests {
         let tree = repo.find_tree(tree_id).expect("find tree");
         index.write().ok();
 
-        // set signature
         let sig = git2::Signature::now("tester", "tester@example.com").expect("sig");
         let oid = repo
             .commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])

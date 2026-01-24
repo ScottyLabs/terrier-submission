@@ -1,5 +1,3 @@
-// Checks to see whether the files that a user has uploaded have similarities between past GitHub
-// repositories.
 use crate::plag_check::verification::VerificationResult;
 
 use regex::Regex;

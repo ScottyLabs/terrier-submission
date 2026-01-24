@@ -30,14 +30,10 @@ fn default_display_threshold() -> f32 {
     0.33 //Default 33% similarity
 }
 
-/// Combined verification result containing both metadata and plagiarism checks
 #[derive(Debug, Serialize)]
 struct VerificationOutput {
-    /// Metadata verification results (commit times, contributors)
     metadata: git_tools::metadata::MetadataVerificationResult,
-    /// Plagiarism verification result (similarity percentage)
     plagiarism: PlagiarismVerificationResult,
-    /// GitHub-related issues encountered during verification
     github_issues: Vec<String>,
 }
 
@@ -271,7 +267,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await;
 
-    // TODO: Check if repo is empty and return empty repo result if so
     let plagiarism_result = match &github_repo {
         Some(repo) => run_plagiarism_check(
             &repo.local_path,
