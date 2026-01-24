@@ -7,6 +7,7 @@ use crate::plag_check::copydetect::run_copydetect;
 use crate::plag_check::gather_repo::{clone_repos_into_dir, gather_repo_urls_and_sizes_from_user};
 use crate::plag_check::plag_result::{PlagiarismVerificationResult, copy_percentage_from_html};
 use crate::plag_check::prereq_check::check_prereq;
+use crate::plag_check::verification::VerificationResult::{Verified, ManualRequired};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -16,17 +17,22 @@ use std::vec::Vec;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigData {
-    zip: PathBuf,
     repo: String,
     usernames: Vec<String>,
     start_time: u64,
     end_time: u64,
     #[serde(default = "default_size_threshold")]
     size_threshold_kb: u32,
+    #[serde(default = "default_display_threshold")]
+    display_threshold: f32
 }
 
 fn default_size_threshold() -> u32 {
     100_000 // ~100MB default
+}
+
+fn default_display_threshold() -> f32 {
+    0.33 //Default 33% similarity
 }
 
 /// Combined verification result containing both metadata and plagiarism checks
@@ -95,10 +101,11 @@ async fn collect_user_repos(
     main_repo: &str,
     copydetect_path: &PathBuf,
     size_threshold_kb: u32,
+    start_time: u64
 ) -> Result<Vec<git_tools::repository::GithubRepo>, Box<dyn std::error::Error>> {
     let mut all_repos = vec![];
     for user in usernames {
-        let urls_with_sizes = gather_repo_urls_and_sizes_from_user(octocrab, user)
+        let urls_with_sizes = gather_repo_urls_and_sizes_from_user(octocrab, user, start_time)
             .await?
             .into_iter()
             .filter(|(url, _)| *url != main_repo)
@@ -113,16 +120,20 @@ async fn collect_user_repos(
 fn run_plagiarism_check(
     main_repo_path: &str,
     comparison_repos: &[git_tools::repository::GithubRepo],
+    display_threshold: f32
 ) -> PlagiarismVerificationResult {
     let comparison_paths: Vec<&str> = comparison_repos
         .iter()
         .map(|repo| &*repo.local_path)
         .collect();
 
-    run_copydetect(vec![main_repo_path], comparison_paths);
-
-    let plag_score = copy_percentage_from_html(Some("report.html".parse().unwrap()));
-    PlagiarismVerificationResult::new(plag_score)
+    let res = run_copydetect(vec![main_repo_path], comparison_paths, display_threshold);
+    if res.unwrap() == "Passed" {
+        let plag_score = copy_percentage_from_html(Some("report.html".parse().unwrap()));
+        PlagiarismVerificationResult::new(plag_score)
+    } else {
+        PlagiarismVerificationResult::new(None)
+    }
 }
 
 fn save_results(
@@ -135,7 +146,15 @@ fn save_results(
     std::fs::remove_dir_all("output").ok();
     std::fs::create_dir("output")?;
 
-    std::fs::rename("report.html", "output/report.html")?;
+    println!("Reached!");
+
+    match &verification_output.plagiarism.result {
+        Verified(percent) => {
+            std::fs::rename("report.html", "output/report.html")?;
+        }
+        _ => {}
+    }
+
     std::fs::rename("result.json", "output/result.json")?;
 
     Ok(())
@@ -179,10 +198,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &data.repo,
         &copydetect_path,
         data.size_threshold_kb,
+        data.start_time
     )
     .await?;
 
-    let plagiarism_result = run_plagiarism_check(&github_repo.local_path, &all_repos);
+    //TODO: Check if repo is empty and return empty repo result if so
+    let plagiarism_result = run_plagiarism_check(&github_repo.local_path, &all_repos, data.display_threshold);
 
     cleanup_repos(all_repos, &copydetect_path);
     github_repo.destroy();

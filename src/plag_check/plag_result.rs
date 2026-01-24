@@ -20,7 +20,7 @@ impl PlagiarismVerificationResult {
             }
         } else {
             Self {
-                result: VerificationResult::PrerequisitesNotMet,
+                result: VerificationResult::ManualRequired,
             }
         }
     }

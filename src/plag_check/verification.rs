@@ -6,6 +6,6 @@ pub enum VerificationResult {
     //The f64 will contain a similarity percentage
     Verified(f64),
 
-    //The user has not installed all the necessary packages
-    PrerequisitesNotMet,
+    //Copydetect was not able to automatically verify due to lack of supported language
+    ManualRequired,
 }
