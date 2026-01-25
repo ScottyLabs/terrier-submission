@@ -10,6 +10,7 @@ pub async fn gather_repo_urls_and_sizes_from_user(
     octocrab: &Octocrab,
     username: &str,
     start_time: u64,
+    main_url: String,
 ) -> octocrab::Result<Vec<(String, u32)>> {
     let repos_page = octocrab
         .users(username)
@@ -41,17 +42,11 @@ pub async fn gather_repo_urls_and_sizes_from_user(
                 (_, None) => true,
                 _ => false,
             };
-            if created_before_cutoff {
+            if created_before_cutoff && url != main_url {
                 res.push((url, size_kb));
             }
         }
     }
-
-    println!("\nREPOS:\n");
-    for (x, y) in &res {
-        println!("{}", format!("{}, {}\n", x, y));
-    }
-    println!("\n");
 
     Ok(res)
 }

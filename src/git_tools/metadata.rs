@@ -1,6 +1,7 @@
 use crate::git_tools::verification::{FailureReason, VerificationResult};
 use git2::{Repository, Sort, Time as GitTime};
 use serde::Serialize;
+use std::cmp::Ordering;
 use std::ops::Range;
 use std::path::Path;
 use std::time::{Duration, SystemTime};

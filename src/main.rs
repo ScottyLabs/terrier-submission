@@ -1,12 +1,15 @@
 mod git_tools;
 mod plag_check;
 
+use crate::git_tools::verification::VerificationResult::Failed;
 use crate::plag_check::copydetect::{CopydetectError, run_copydetect};
 use crate::plag_check::gather_repo::{clone_repos_into_dir, gather_repo_urls_and_sizes_from_user};
 use crate::plag_check::plag_result::{PlagiarismVerificationResult, copy_percentage_from_html};
 use crate::plag_check::prereq_check::check_prereq;
+use crate::plag_check::verification::VerificationResult;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering::{Greater, Less};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -45,6 +48,54 @@ struct VerificationOutput {
 struct Args {
     #[arg(short, long, required = true)]
     path: String,
+
+    #[arg(short, long, required = true)]
+    mode: String,
+}
+
+fn sort_verification_result(mut output: Vec<VerificationOutput>) -> Vec<VerificationOutput> {
+    output.sort_by(|a, b| {
+        let ameta = &a.metadata;
+        let bmeta = &b.metadata;
+
+        match (&ameta.first_commit_time, &bmeta.first_commit_time) {
+            (Failed(_), _) => return Less,
+            (_, Failed(_)) => return Greater,
+            _ => {}
+        }
+
+        match (&ameta.contributors, &bmeta.contributors) {
+            (Failed(_), _) => return Less,
+            (_, Failed(_)) => return Greater,
+            _ => {}
+        }
+
+        match (&a.plagiarism.result, &b.plagiarism.result) {
+            (VerificationResult::ManualRequired, _) => return Less,
+            (_, VerificationResult::ManualRequired) => return Greater,
+            _ => {}
+        }
+
+        let a_length = &a.github_issues.len();
+        let b_length = &a.github_issues.len();
+
+        if a_length > b_length {
+            return Less;
+        } else if a_length < b_length {
+            return Greater;
+        }
+
+        let a_percent = &a.plagiarism.result.get_percent();
+        let b_percent = &b.plagiarism.result.get_percent();
+
+        if a_percent <= b_percent {
+            return Less;
+        } else {
+            return Greater;
+        }
+    });
+
+    output
 }
 
 fn system_time_from_unix_secs(secs: u64) -> std::time::SystemTime {
@@ -74,6 +125,24 @@ fn load_config(path: &str) -> Result<ConfigData, Box<dyn std::error::Error>> {
     })?;
 
     let data: ConfigData = serde_json::from_str(&contents).map_err(|err| {
+        format!(
+            "The JSON file provided ('{}') is not a valid JSON file: {}",
+            path, err
+        )
+    })?;
+
+    Ok(data)
+}
+
+fn load_multiple(path: &str) -> Result<Vec<ConfigData>, Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string(path).map_err(|_e| {
+        format!(
+            "The JSON file provided ('{}') does not exist or could not be read.",
+            path
+        )
+    })?;
+
+    let data: Vec<ConfigData> = serde_json::from_str(&contents).map_err(|err| {
         format!(
             "The JSON file provided ('{}') is not a valid JSON file: {}",
             path, err
@@ -121,9 +190,9 @@ async fn collect_user_repos(
     clone_repos: bool,
     github_issues: &mut Vec<String>,
 ) -> Vec<git_tools::repository::GithubRepo> {
-    let mut all_repos = vec![];
+    let mut repo_infos = vec![];
     for user in usernames {
-        let urls_with_sizes = match gather_repo_urls_and_sizes_from_user(octocrab, user, start_time)
+        let urls_with_sizes = match gather_repo_urls_and_sizes_from_user(octocrab, user, start_time, main_repo.into())
             .await
         {
             Ok(urls) => urls,
@@ -132,20 +201,31 @@ async fn collect_user_repos(
                 continue;
             }
         };
-        let urls_with_sizes = urls_with_sizes
-            .into_iter()
-            .filter(|(url, _)| *url != main_repo)
-            .collect::<Vec<_>>();
-        if clone_repos {
-            let repos = clone_repos_into_dir(
-                urls_with_sizes,
-                copydetect_path,
-                size_threshold_kb,
-                github_issues,
-            )
-            .await;
-            all_repos.extend(repos);
+
+        repo_infos.push(urls_with_sizes);
+    }
+
+    let mut all_repos = vec![];
+    if clone_repos {
+        let mut to_clone = vec![];
+
+        let mut cont = true;
+        let mut i = 0;
+        while cont {
+            cont = false;
+            for info in &repo_infos {
+                if i >= info.len() {
+                    continue;
+                }
+                cont = true;
+                to_clone.push(info[i].clone());
+            }
+            i += 1;
         }
+
+        let repos =
+            clone_repos_into_dir(to_clone, copydetect_path, size_threshold_kb, github_issues).await;
+        all_repos.extend(repos);
     }
     all_repos
 }
@@ -212,6 +292,21 @@ fn save_results(
     Ok(())
 }
 
+fn save_all(
+    verification_output: Vec<VerificationOutput>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let serialized = serde_json::to_string_pretty(&verification_output)?;
+    let output_dir = Path::new("output");
+    if output_dir.exists() {
+        fs::remove_dir_all(output_dir)?;
+    }
+    fs::create_dir_all(output_dir)?;
+
+    fs::write(output_dir.join("result.json"), serialized)?;
+
+    Ok(())
+}
+
 fn setup_copydetect_dir(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if path.exists() {
         fs::remove_dir_all(path)?;
@@ -227,15 +322,8 @@ fn cleanup_repos(repos: Vec<git_tools::repository::GithubRepo>, copydetect_path:
     let _ = fs::remove_dir_all(copydetect_path);
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    verify_prerequisites()?;
-
-    let args = Args::parse();
+async fn single_input(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let data = load_config(&args.path)?;
-
-    println!("Input Data:\n{:?}", &data);
-    println!("\n----------------\n");
 
     let repo_constraints = build_metadata_constraints(&data);
     let mut github_issues = Vec::new();
@@ -288,13 +376,96 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         github_issues,
     };
 
-    println!("Result Data:\n{:?}", verification_output);
-
     save_results(&verification_output)?;
 
     cleanup_repos(all_repos, &copydetect_path);
     if let Some(repo) = github_repo {
         repo.destroy();
+    }
+
+    Ok(())
+}
+
+async fn multiple_inputs(
+    data: ConfigData,
+) -> Result<VerificationOutput, Box<dyn std::error::Error>> {
+    let repo_constraints = build_metadata_constraints(&data);
+    let mut github_issues = Vec::new();
+    let (github_repo, metadata_result) =
+        match git_tools::repository::GithubRepo::new(&data.repo, false) {
+            Ok(repo) => {
+                let metadata_result =
+                    git_tools::metadata::check_metadata_at_path(&repo.local_path, repo_constraints);
+                (Some(repo), metadata_result)
+            }
+            Err(err) => {
+                github_issues.push(format!(
+                    "Failed to clone main repo '{}': {}",
+                    data.repo, err
+                ));
+                (None, metadata_result_from_clone_error(err))
+            }
+        };
+
+    let copydetect_path = PathBuf::from("/tmp/repo_copydetect");
+    setup_copydetect_dir(&copydetect_path)?;
+
+    let octocrab = octocrab::Octocrab::builder().build()?;
+    let all_repos = collect_user_repos(
+        &octocrab,
+        &data.usernames,
+        &data.repo,
+        &copydetect_path,
+        data.size_threshold_kb,
+        data.start_time,
+        github_repo.is_some(),
+        &mut github_issues,
+    )
+    .await;
+
+    // TODO: Check if repo is empty and return empty repo result if so
+    let plagiarism_result = match &github_repo {
+        Some(repo) => run_plagiarism_check(
+            &repo.local_path,
+            &all_repos,
+            data.display_threshold,
+            &copydetect_path,
+        ),
+        None => PlagiarismVerificationResult::manual(None),
+    };
+
+    let verification_output = VerificationOutput {
+        metadata: metadata_result,
+        plagiarism: plagiarism_result,
+        github_issues,
+    };
+
+    cleanup_repos(all_repos, &copydetect_path);
+    if let Some(repo) = github_repo {
+        repo.destroy();
+    }
+
+    Ok(verification_output)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+    verify_prerequisites()?;
+
+    if args.mode == "single" {
+        single_input(&args);
+    } else if args.mode == "all" {
+        let mut outputs: Vec<VerificationOutput> = Vec::new();
+        let data = load_multiple(&args.path)?;
+        for point in data {
+            println!("");
+            outputs.push(multiple_inputs(point).await?);
+        }
+
+        outputs = sort_verification_result(outputs);
+
+        save_all(outputs)?;
     }
 
     Ok(())

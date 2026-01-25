@@ -1,10 +1,27 @@
-{
-  "repo": "https://github.com/SnowballSH/Avalanche",
-  "usernames": [
-    "KothurVidur"
-  ],
-  "start_time": 1769280135,
-  "end_time": 175848650400,
-  "size_threshold_kb": 100000,
-  "display_threshold": 0.5
-}
+[
+  {
+    "repo": "https://github.com/SnowballSH/Avalanche",
+    "usernames": [
+      "KritDass",
+      "SnowballSH",
+      "KothurVidur",
+      "gstavya",
+      "mathletesv"
+    ],
+    "start_time": 1769280135,
+    "end_time": 175848650400,
+    "size_threshold_kb": 100000,
+    "display_threshold": 0.5
+  },
+  {
+    "repo": "https://github.com/KothurVidur/NeuralNetwork",
+    "usernames": [
+      "KothurVidur",
+      "SnowballSH"
+    ],
+    "start_time": 1769280135,
+    "end_time": 175848650400,
+    "size_threshold_kb": 100000,
+    "display_threshold": 0.5
+  }
+]
