@@ -111,7 +111,6 @@ mod tests {
     }
 
     fn commit_all(repo: &Repository, message: &str) {
-        // Add all changes
         let mut index = repo.index().expect("open index");
         index
             .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
@@ -152,7 +151,6 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let repo = Repository::init(&dir).expect("init repo");
 
-        // First commit
         write_file(&dir, "a.txt", "one");
         commit_all(&repo, "first");
         let first_oid = repo.head().unwrap().peel_to_commit().unwrap().id();
@@ -161,7 +159,6 @@ mod tests {
         // Ensure the next commit has a distinct later timestamp
         std::thread::sleep(Duration::from_millis(67));
 
-        // Second commit
         write_file(&dir, "a.txt", "two");
         commit_all(&repo, "second");
         let second_oid = repo.head().unwrap().peel_to_commit().unwrap().id();

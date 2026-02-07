@@ -1,12 +1,9 @@
 [
   {
-    "repo": "https://github.com/SnowballSH/Avalanche",
+    "repo": "https://github.com/KothurVidur/NeuralNetwork",
     "usernames": [
-      "KritDass",
-      "SnowballSH",
       "KothurVidur",
-      "gstavya",
-      "mathletesv"
+      "SnowballSH"
     ],
     "start_time": 1769280135,
     "end_time": 175848650400,
@@ -14,10 +11,13 @@
     "display_threshold": 0.5
   },
   {
-    "repo": "https://github.com/KothurVidur/NeuralNetwork",
+    "repo": "https://github.com/SnowballSH/Avalanche",
     "usernames": [
+      "KritDass",
+      "SnowballSH",
       "KothurVidur",
-      "SnowballSH"
+      "gstavya",
+      "mathletesv"
     ],
     "start_time": 1769280135,
     "end_time": 175848650400,

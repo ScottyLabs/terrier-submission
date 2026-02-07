@@ -2,15 +2,10 @@ use serde::Serialize;
 use serde::ser::SerializeStruct;
 use std::time::SystemTime;
 
-/// The reason why a verification failed
 #[derive(Debug)]
 pub enum FailureReason {
-    /// An error occurred while accessing the Git repository
     GitError(git2::Error),
-    /// The actual time is not within the specified range
-    /// The contained `SystemTime` is the actual time that failed the check
     TimeNotInRange(SystemTime),
-    /// Any users that were not provided but committed to the repo
     AdditionalUnauthorizedUsers(Vec<String>),
 }
 
@@ -21,7 +16,6 @@ impl Serialize for FailureReason {
     {
         match self {
             FailureReason::GitError(e) => {
-                // Object with two fields: type, message
                 let mut state = serializer.serialize_struct("FailureReason", 2)?;
                 state.serialize_field("errorType", "GitError")?;
                 state.serialize_field("errorMessage", &e.message())?;
@@ -45,13 +39,9 @@ impl Serialize for FailureReason {
     }
 }
 
-/// The result of verifying a single field against its constraint
 #[derive(Debug, Serialize)]
 pub enum VerificationResult {
-    /// This field satisfied the constraint
     Verified,
-    /// This field was not verified because the constraint was not set
     Skipped,
-    /// This field failed to satisfy the constraint
     Failed(FailureReason),
 }
